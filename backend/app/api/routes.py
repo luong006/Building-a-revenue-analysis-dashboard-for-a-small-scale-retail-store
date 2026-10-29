@@ -120,11 +120,12 @@ def get_top_products(
     start_date: date | None = Query(None, description="Ngày bắt đầu, bao gồm"),
     end_date: date | None = Query(None, description="Ngày kết thúc, bao gồm"),
     limit: int = Query(10, ge=1, le=50),
+    sort_by: Literal["revenue", "quantity"] = Query("revenue"),
     _dataset=Depends(require_dataset),
 ):
     validate_date_range(start_date, end_date)
     return calculate_top_products(
-        location, category, limit, start_date, end_date
+        location, category, limit, start_date, end_date, sort_by
     )
 
 

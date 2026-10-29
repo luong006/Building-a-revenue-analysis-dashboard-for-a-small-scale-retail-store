@@ -16,13 +16,15 @@ async function getJSON(path) {
   return response.json();
 }
 
-function buildQuery({ location, category, startDate, endDate, limit } = {}) {
+function buildQuery({ location, category, startDate, endDate, limit, granularity, sortBy } = {}) {
   const params = new URLSearchParams();
   if (location && location !== "All Locations") params.set("location", location);
   if (category && category !== "All Categories") params.set("category", category);
   if (startDate) params.set("start_date", startDate);
   if (endDate) params.set("end_date", endDate);
   if (limit) params.set("limit", String(limit));
+  if (granularity) params.set("granularity", granularity);
+  if (sortBy) params.set("sort_by", sortBy);
   const query = params.toString();
   return query ? `?${query}` : "";
 }
@@ -33,6 +35,10 @@ export function fetchHealth() {
 
 export function fetchLocations() {
   return getJSON("/api/locations");
+}
+
+export function fetchCategories() {
+  return getJSON("/api/categories");
 }
 
 export function fetchSummaryKPIs(filters) {

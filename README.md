@@ -78,8 +78,8 @@ Mặc định frontend gọi `http://localhost:8000`. Để gọi backend khác,
 - Dữ liệu nguồn: [Coffee Shop Sales của Ahmedabbas75](https://github.com/Ahmedabbas75/Coffee-Shop-Sales), cửa hàng giả lập Maven Roasters.
 - CSV chuẩn hóa: `backend/data/CLEAN - Transactions.csv`; backend dùng file này theo mặc định. Có thể đặt `DATA_PATH` để dùng file khác khi cần.
 - Quy trình cập nhật: lưu bản raw riêng → làm sạch và chuẩn hóa → xuất CSV UTF-8 đúng schema → cập nhật file trên → chạy tests và kiểm tra API.
-- Chỉ số: doanh thu bán hàng (`transaction_qty × unit_price`), số giao dịch duy nhất, số sản phẩm bán ra, AOV, UPT, ASP và tổng hợp theo giờ/sản phẩm.
-- Mã tiền tệ không được gán trong API cho đến khi xác minh metadata của nguồn; giá trị mặc định hiển thị theo đơn vị tiền tệ gốc, không tự quy đổi.
+- Chỉ số: doanh thu bán hàng (`transaction_qty × unit_price`), số mã giao dịch duy nhất, số lượng bán, AOV, UPT, ASP; cơ cấu theo danh mục/địa điểm; xu hướng ngày/tháng; phân tích giờ/thứ; xếp hạng sản phẩm theo doanh thu và số lượng; so sánh kỳ liền trước khi có đủ khoảng ngày.
+- Đơn vị báo cáo hiển thị: USD theo quyết định của đồ án. Sales tax NYC 8,875% chỉ hiển thị như kịch bản ước tính riêng với giả định toàn bộ giao dịch chịu thuế và giá chưa gồm thuế; không phải tax collected thực tế. Xem [`docs/financial_model.md`](docs/financial_model.md).
 
 Xem [hợp đồng dữ liệu và giới hạn diễn giải](docs/technical_architecture.md) trước khi thêm chỉ số hoặc mở rộng phạm vi.
 GitHub Actions chạy backend tests và frontend build cho mỗi push/PR lên `main`.

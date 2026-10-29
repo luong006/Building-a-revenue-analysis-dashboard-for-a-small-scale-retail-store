@@ -17,7 +17,7 @@ Tạo Web Service từ repository, cấu hình:
 - Health Check Path: `/healthz` (không phụ thuộc CSV).
 - `CORS_ORIGINS`: mặc định `*` cho API đọc dữ liệu công khai; có thể giới hạn thành origin Vercel production và preview, phân cách bằng dấu phẩy.
 - `DATA_PATH`: để trống nếu dùng file mặc định `data/CLEAN - Transactions.csv` trong thư mục `backend`.
-- `CURRENCY_CODE`: để trống cho đến khi xác minh đơn vị tiền tệ từ nguồn.
+- `CURRENCY_CODE`: mặc định `USD` theo quyết định báo cáo của đồ án; có thể ghi đè nếu metadata nguồn được xác minh khác.
 
 `render.yaml` ở thư mục gốc khai báo cấu hình Blueprint để Render tạo service. Sau deploy, kiểm tra `/healthz`, `/api/health` và `/docs`. Nếu CSV không có ở đường dẫn đã cấu hình, `/api/health` báo `dataset_status: missing` và API phân tích trả HTTP 503; điều này không làm Render đánh dấu service offline.
 

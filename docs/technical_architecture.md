@@ -14,7 +14,7 @@ Không suy ra lợi nhuận, biên lợi nhuận, giá vốn, tồn kho hiện t
 4. Chạy backend tests, build frontend và kiểm tra `/api/metadata`.
 5. Commit/push CSV cùng thay đổi mã nguồn. Render và Vercel deploy từ GitHub.
 
-Sau khi làm sạch, CSV trong repository là bản dữ liệu được triển khai. Backend không đọc Google Sheets trực tiếp và không cần thông tin đăng nhập Google. Trước khi CSV được thêm vào, backend vẫn deploy được nhưng API phân tích trả HTTP 503 cùng trạng thái `missing`. Không lưu workbook gốc hoặc thông tin nhạy cảm trong repository.
+Sau khi làm sạch, CSV trong repository là bản dữ liệu được triển khai. Backend không đọc Google Sheets trực tiếp và không cần thông tin đăng nhập Google. Nếu CSV bị thiếu, backend vẫn deploy được nhưng API phân tích trả HTTP 503 cùng trạng thái `missing`. Không lưu workbook gốc hoặc thông tin nhạy cảm trong repository.
 
 ## 3. Thành phần
 
@@ -45,7 +45,13 @@ Gọi:
 | ASP | `R / Q`; bằng 0 khi không có sản phẩm bán ra. |
 | Tỷ trọng doanh thu sản phẩm | Doanh thu sản phẩm / `R` × 100; bằng 0 khi `R = 0`. |
 
-Theo định nghĩa trên, `R = N × UPT × ASP` trước sai số làm tròn. `R` được dẫn xuất từ `transaction_qty × unit_price`; nếu workbook cho thấy có giảm giá, hoàn trả hoặc thuế cần xử lý, phải thống nhất lại trước khi sử dụng chỉ số.
+Theo định nghĩa trên, `R = N × UPT × ASP` trước sai số làm tròn. Dashboard còn hiển thị doanh thu và số lượng theo danh mục/địa điểm/sản phẩm, xu hướng ngày/tháng, doanh thu theo giờ và doanh thu bình quân mỗi ngày có giao dịch theo thứ. So sánh kỳ liền trước chỉ xuất hiện khi người xem chọn đầy đủ khoảng ngày và có đủ lịch sử cho một kỳ ngay trước đó cùng độ dài.
+
+Doanh thu được tính từ `transaction_qty × unit_price`, không bao gồm điều chỉnh thuế/giảm giá/hoàn tiền do CSV không cung cấp. USD là đơn vị báo cáo theo quyết định của đồ án; chưa xác minh độc lập mã tiền tệ trong nguồn.
+
+### Kịch bản sales tax riêng
+
+Dashboard hiển thị thêm kịch bản `R × 8.875%`, tham chiếu combined NYC rate cho các địa điểm New York City trong dataset. Kịch bản giả định toàn bộ doanh thu chịu thuế và đơn giá chưa gồm thuế. Số này được gắn nhãn ước tính, tách khỏi doanh thu, không đại diện thuế thực thu/nộp và không được cộng vào doanh thu. CSV thiếu trạng thái dine-in/takeout, thông tin đóng gói/chế biến và taxability theo dòng nên không thể xác định thuế thực tế cho từng giao dịch. Nguồn và giới hạn chi tiết ở [financial model](financial_model.md).
 
 ## 5. API hiện tại
 
@@ -55,13 +61,13 @@ Các endpoint phân tích nhận bộ lọc tùy chọn `location`, `category`, 
 |---|---|
 | `GET /healthz` | Liveness probe cho Render; không phụ thuộc dataset |
 | `GET /api/health` | Trạng thái API và dataset (`available`, `missing` hoặc `invalid`) |
-| `GET /api/metadata` | Số dòng, ngày đầu/cuối và mã tiền tệ nếu đã cấu hình |
+| `GET /api/metadata` | Số dòng, ngày đầu/cuối và mã tiền tệ báo cáo (`USD`) |
 | `GET /api/locations` | Các địa điểm có trong CSV |
 | `GET /api/categories` | Các danh mục có trong CSV |
 | `GET /api/metrics/summary` | Doanh thu, giao dịch, số lượng, AOV, UPT, ASP |
 | `GET /api/metrics/hourly` | Tổng hợp theo giờ |
 | `GET /api/metrics/trend` | Chuỗi doanh thu theo ngày hoặc tháng; `granularity=day|month` |
-| `GET /api/metrics/top-products` | Xếp hạng doanh thu sản phẩm; `limit` từ 1 đến 50 |
+| `GET /api/metrics/top-products` | Xếp hạng theo doanh thu hoặc số lượng, kèm mã giao dịch, số lượng, doanh thu và tỷ trọng; `sort_by=revenue|quantity`, `limit` từ 1 đến 50 |
 
 Frontend không dùng fallback dữ liệu giả khi API lỗi; lỗi được hiển thị thay cho số liệu. Các bộ lọc ngày tùy chỉnh có sẵn ở API để giao diện tiếp theo kết nối chính xác với dữ liệu lịch sử, không dùng bộ lọc “hôm nay” theo ngày hiện tại.
 
@@ -71,7 +77,7 @@ Frontend không dùng fallback dữ liệu giả khi API lỗi; lỗi được h
 |---|---|---|
 | `DATA_PATH` | `backend/data/CLEAN - Transactions.csv` | Đường dẫn CSV sạch; có thể ghi đè khi triển khai |
 | `CORS_ORIGINS` | `http://localhost:5173` | Danh sách origin, phân cách bằng dấu phẩy |
-| `CURRENCY_CODE` | Không cấu hình | Mã tiền tệ chỉ đặt sau khi xác minh nguồn |
+| `CURRENCY_CODE` | `USD` | Mã tiền tệ báo cáo theo quyết định của đồ án |
 | `VITE_API_BASE_URL` | `http://localhost:8000` | URL backend được nhúng lúc build frontend |
 
 Nếu triển khai Vercel production/preview với origin giới hạn, cấu hình các origin frontend cần thiết trong `CORS_ORIGINS` trên Render. API hiện là API đọc dữ liệu công khai, không có tài khoản hoặc cookie.

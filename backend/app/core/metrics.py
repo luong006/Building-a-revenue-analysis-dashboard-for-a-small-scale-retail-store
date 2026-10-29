@@ -112,7 +112,14 @@ def calculate_top_products(
     limit: int = 10,
     start_date: date | None = None,
     end_date: date | None = None,
+    sort_by: str = "revenue",
 ):
+    sort_expression = {
+        "revenue": "product_revenue DESC, quantity_sold DESC",
+        "quantity": "quantity_sold DESC, product_revenue DESC",
+    }
+    if sort_by not in sort_expression:
+        raise ValueError("sort_by must be 'revenue' or 'quantity'")
     where_clause, parameters = build_filter_clause(
         location, category, start_date, end_date
     )
@@ -127,11 +134,12 @@ def calculate_top_products(
             product,
             category,
             SUM(quantity) AS quantity_sold,
+            COUNT(DISTINCT transaction_id) AS transaction_count,
             ROUND(SUM(line_total), 2) AS product_revenue
         FROM sales_view
         {where_clause}
         GROUP BY product, category
-        ORDER BY product_revenue DESC
+        ORDER BY {sort_expression[sort_by]}
         LIMIT ?
         """,
         [*parameters, limit],
@@ -141,8 +149,9 @@ def calculate_top_products(
             "product": str(row[0]),
             "category": str(row[1]),
             "quantity_sold": int(row[2]),
-            "total_revenue": float(row[3]),
-            "revenue_share_pct": round(float(row[3]) / total_revenue * 100, 2)
+            "transaction_count": int(row[3]),
+            "total_revenue": float(row[4]),
+            "revenue_share_pct": round(float(row[4]) / total_revenue * 100, 2)
             if total_revenue
             else 0.0,
         }

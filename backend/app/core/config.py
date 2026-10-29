@@ -8,7 +8,7 @@ DATA_PATH = Path(
         str(BACKEND_DIR / "data" / "CLEAN - Transactions.csv"),
     )
 ).expanduser()
-CURRENCY_CODE = os.getenv("CURRENCY_CODE") or None
+CURRENCY_CODE = os.getenv("CURRENCY_CODE") or "USD"
 
 configured_origins = os.getenv("CORS_ORIGINS", "http://localhost:5173")
 CORS_ORIGINS = [
