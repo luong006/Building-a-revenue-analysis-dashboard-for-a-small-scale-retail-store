@@ -10,7 +10,10 @@ DATA_PATH = Path(
 ).expanduser()
 CURRENCY_CODE = os.getenv("CURRENCY_CODE") or "USD"
 
-configured_origins = os.getenv("CORS_ORIGINS", "http://localhost:5173")
+configured_origins = os.getenv(
+    "CORS_ORIGINS",
+    "http://localhost:5173,https://retail-pulse-dashboard-eight.vercel.app",
+)
 CORS_ORIGINS = [
     origin.strip() for origin in configured_origins.split(",") if origin.strip()
 ]

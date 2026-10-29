@@ -60,3 +60,70 @@ export function fetchSalesTrend(filters) {
 export function fetchDatasetMetadata() {
   return getJSON("/api/metadata");
 }
+
+async function authenticatedRequest(path, token, options = {}) {
+  const headers = new Headers(options.headers || {});
+  headers.set("Authorization", `Bearer ${token}`);
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    ...options,
+    headers,
+  });
+  const body = await response.json().catch(() => null);
+  if (!response.ok) {
+    const detail = body?.detail;
+    throw new Error(
+      typeof detail === "string" ? detail : detail?.message || response.statusText,
+    );
+  }
+  return body;
+}
+
+export function registerAccount(email, password) {
+  return authenticatedRequest("/api/auth/register", "", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  });
+}
+
+export function loginAccount(email, password) {
+  return authenticatedRequest("/api/auth/login", "", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  });
+}
+
+export function fetchCurrentUser(token) {
+  return authenticatedRequest("/api/auth/me", token);
+}
+
+export function fetchDatasets(token) {
+  return authenticatedRequest("/api/datasets", token);
+}
+
+export function uploadDataset(token, file) {
+  const formData = new FormData();
+  formData.append("file", file);
+  return authenticatedRequest("/api/datasets/upload", token, {
+    method: "POST",
+    body: formData,
+  });
+}
+
+export function fetchDashboard(token, datasetId, filters, granularity) {
+  const params = new URLSearchParams();
+  if (filters.location && filters.location !== "All Locations") {
+    params.set("location", filters.location);
+  }
+  if (filters.category && filters.category !== "All Categories") {
+    params.set("category", filters.category);
+  }
+  if (filters.startDate) params.set("start_date", filters.startDate);
+  if (filters.endDate) params.set("end_date", filters.endDate);
+  params.set("granularity", granularity);
+  return authenticatedRequest(
+    `/api/datasets/${datasetId}/dashboard?${params.toString()}`,
+    token,
+  );
+}

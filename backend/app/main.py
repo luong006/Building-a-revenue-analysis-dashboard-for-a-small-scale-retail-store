@@ -1,12 +1,14 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes import router
+from app.api.user_routes import router as user_router
 from app.core.config import CORS_ORIGINS
+from app.core.persistence import initialize_database
 
 app = FastAPI(
     title="Retail Pulse Analytics API",
-    description="API phân tích dữ liệu bán hàng lịch sử cho đồ án ISV3010.",
-    version="1.0.0"
+    description="API phân tích dữ liệu bán hàng với dataset riêng theo tài khoản.",
+    version="2.0.0",
 )
 
 # CORS setup for Vercel, Render and local development
@@ -19,6 +21,12 @@ app.add_middleware(
 )
 
 app.include_router(router)
+app.include_router(user_router)
+
+
+@app.on_event("startup")
+def startup_database():
+    initialize_database()
 
 @app.get("/healthz", include_in_schema=False)
 def platform_health_check():
@@ -31,6 +39,7 @@ def root():
         "docs_url": "/docs",
         "health_check": "/healthz",
         "dataset_status": "/api/health",
+        "account_dataset_api": "/api/datasets",
     }
 
 if __name__ == "__main__":

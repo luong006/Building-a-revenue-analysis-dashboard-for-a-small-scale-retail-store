@@ -47,6 +47,7 @@ export default function KPICards({
   data,
   loading = false,
   comparison = null,
+  showTaxScenario = true,
 }) {
   const cards = [
     {
@@ -124,7 +125,7 @@ export default function KPICards({
           </article>
         ))}
       </div>
-      {data && (
+      {data && showTaxScenario && (
         <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-600 shadow-sm">
           <span className="inline-flex items-center gap-1.5 font-semibold text-slate-800">
             <ArrowUpRight aria-hidden="true" className="h-4 w-4 text-teal-700" />

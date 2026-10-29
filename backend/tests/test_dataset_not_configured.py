@@ -40,3 +40,12 @@ class DatasetNotConfiguredTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 503)
         self.assertEqual(response.json()["detail"]["dataset_status"], "missing")
+
+    def test_account_features_require_persistent_database_configuration(self):
+        response = self.client.post(
+            "/api/auth/register",
+            json={"email": "new@example.com", "password": "LongEnoughPassword1"},
+        )
+
+        self.assertEqual(response.status_code, 503)
+        self.assertIn("DATABASE_URL", response.json()["detail"])

@@ -49,14 +49,14 @@ def health_check():
             "status": "healthy",
             "service": "Retail Pulse Analytics API",
             "dataset_status": error.status,
-            "database": "DuckDB CSV analytics",
+            "database": "PostgreSQL datasets and DuckDB CSV sample analytics",
             "dataset_message": error.message,
         }
     return {
         "status": "healthy",
         "service": "Retail Pulse Analytics API",
         "dataset_status": "available",
-        "database": "DuckDB CSV analytics",
+        "database": "PostgreSQL datasets and DuckDB CSV sample analytics",
     }
 
 

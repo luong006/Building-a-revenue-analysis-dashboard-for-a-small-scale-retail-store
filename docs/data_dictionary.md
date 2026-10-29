@@ -2,7 +2,7 @@
 
 ## Dataset sẽ đưa vào hệ thống
 
-Nguồn là dataset Coffee Shop Sales của Maven Roasters, cửa hàng giả lập ở New York. File `backend/data/CLEAN - Transactions.csv` là bản đã được chuẩn hóa để dùng làm nguồn dữ liệu cho hệ thống; tên file được giữ nguyên theo yêu cầu. File cần có đúng các tiêu đề dưới đây và được kiểm tra lại trước khi đưa vào backend.
+Nguồn là dataset Coffee Shop Sales của Maven Roasters, cửa hàng giả lập ở New York. File `backend/data/CLEAN - Transactions.csv` là dữ liệu mẫu được dùng để seed dataset Coffee vào PostgreSQL lần đầu. Người dùng cũng có thể tải CSV riêng theo đúng 11 cột dưới đây; mỗi dataset được lưu trong PostgreSQL gắn với tài khoản tải lên.
 
 | Cột CSV chuẩn | Cột nguồn tương ứng | Kiểu sau làm sạch | Quy tắc |
 |---|---|---|---|
@@ -18,7 +18,7 @@ Nguồn là dataset Coffee Shop Sales của Maven Roasters, cửa hàng giả l�
 | `product_type` | `product_type` | Văn bản | Không rỗng; chuẩn hóa nhãn |
 | `product_detail` | `product_detail` | Văn bản | Giữ nội dung nguồn; nếu trống, tên hiển thị fallback sang `product_type` |
 
-Giữ bộ tiêu đề chuẩn này khi xuất CSV; không cần thêm cột `sales`, `hour`, `month`, `weekday` hay cột index. Backend tính doanh thu dòng là `transaction_qty × unit_price` và lấy giờ từ `transaction_time`, tránh phải đồng bộ các cột dẫn xuất thủ công.
+Giữ bộ tiêu đề chuẩn này khi xuất CSV; không cần thêm cột `sales`, `hour`, `month`, `weekday` hay cột index. Backend tính doanh thu dòng là `transaction_qty × unit_price` và lấy giờ từ `transaction_time`, tránh phải đồng bộ các cột dẫn xuất thủ công. Giai đoạn hiện tại mặc định coi `unit_price` là USD; nếu nguồn CSV dùng tiền tệ khác, cần chuyển đổi thống nhất trước khi upload. Kịch bản thuế NYC chỉ hiển thị với dataset Coffee mẫu, không áp dụng tự động cho CSV khác.
 
 ## Các bước làm sạch trên Google Sheets
 
@@ -28,8 +28,9 @@ Giữ bộ tiêu đề chuẩn này khi xuất CSV; không cần thêm cột `sa
 4. Kiểm tra giá trị trống, transaction ID trùng, ID không phải số, quantity bằng 0/âm, unit price âm, ngày/giờ không hợp lệ.
 5. Đối chiếu số dòng và tổng quantity; kiểm tra hợp lý doanh thu tính từ `quantity × unit_price` trước/sau chuẩn hóa.
 6. Ghi rõ phép tính doanh thu dùng đơn giá và quantity của nguồn. Nếu workbook có giảm giá, hoàn tiền, thuế hoặc định nghĩa sales khác, dừng và thống nhất cách xử lý trước khi xuất dữ liệu.
-7. Tải xuống CSV UTF-8, không giữ số dòng tiêu đề kép, không thêm index; lưu tại `backend/data/CLEAN - Transactions.csv`.
-8. Chạy backend tests, gọi `/api/health`, `/api/metadata` và đối chiếu tổng quan trước khi push.
+7. Tải xuống CSV UTF-8, không giữ số dòng tiêu đề kép, không thêm index.
+8. Dùng upload trong dashboard; API giới hạn file 25 MB/250.000 dòng, kiểm tra schema, kiểu dữ liệu, miền giá trị và transaction ID trùng trước khi lưu.
+9. Chạy backend tests và đối chiếu tổng quan sau khi upload.
 
 ## Giới hạn nguồn và diễn giải
 
