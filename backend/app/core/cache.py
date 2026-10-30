@@ -39,6 +39,18 @@ def set_cached_json(key: str, value):
         logger.warning("Redis cache write failed; serving calculated response: %s", error)
 
 
+def invalidate_dataset_cache(dataset_id: int):
+    if _client is None:
+        return
+    pattern = f"retail-pulse:dashboard:*dataset-{dataset_id}:*"
+    try:
+        keys = list(_client.scan_iter(match=pattern, count=200))
+        if keys:
+            _client.delete(*keys)
+    except RedisError as error:
+        logger.warning("Redis cache invalidation failed for dataset %s: %s", dataset_id, error)
+
+
 def cache_status() -> str:
     if _client is None:
         return "not_configured"

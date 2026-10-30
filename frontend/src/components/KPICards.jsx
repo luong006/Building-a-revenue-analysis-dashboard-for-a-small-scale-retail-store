@@ -47,31 +47,39 @@ export default function KPICards({
   data,
   loading = false,
   comparison = null,
-  showTaxScenario = true,
+  showTaxScenario = false,
 }) {
   const cards = [
     {
       label: "Doanh thu bán hàng",
-      value: data ? usd(data.total_revenue) : "—",
+      value: loading ? "…" : data ? usd(data.total_revenue) : "—",
       caption: "Giá trị bán hàng ghi nhận · USD",
       icon: CircleDollarSign,
       featured: true,
     },
     {
       label: "Mã giao dịch",
-      value: data ? Number(data.total_transactions).toLocaleString("en-US") : "—",
+      value: loading
+        ? "…"
+        : data
+          ? Number(data.total_transactions).toLocaleString("en-US")
+          : "—",
       caption: "Số mã giao dịch duy nhất",
       icon: ReceiptText,
     },
     {
       label: "Số lượng bán",
-      value: data ? Number(data.total_items_sold).toLocaleString("en-US") : "—",
+      value: loading
+        ? "…"
+        : data
+          ? Number(data.total_items_sold).toLocaleString("en-US")
+          : "—",
       caption: "Tổng đơn vị sản phẩm ghi nhận",
       icon: PackageCheck,
     },
     {
       label: "Doanh thu bình quân/mã giao dịch",
-      value: data ? usd(data.aov) : "—",
+      value: loading ? "…" : data ? usd(data.aov) : "—",
       caption: "Doanh thu bán hàng ÷ số mã giao dịch",
       icon: ShoppingCart,
     },
@@ -104,7 +112,7 @@ export default function KPICards({
                   }`}
                   aria-live="polite"
                 >
-                  {loading && !data ? "…" : value}
+                  {value}
                 </p>
                 <p
                   className={`mt-1 text-xs ${
@@ -125,7 +133,7 @@ export default function KPICards({
           </article>
         ))}
       </div>
-      {data && showTaxScenario && (
+      {data && !loading && (
         <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-600 shadow-sm">
           <span className="inline-flex items-center gap-1.5 font-semibold text-slate-800">
             <ArrowUpRight aria-hidden="true" className="h-4 w-4 text-teal-700" />
@@ -146,7 +154,7 @@ export default function KPICards({
           <span className="text-slate-500">Doanh thu không phải lợi nhuận.</span>
         </div>
       )}
-      {data && (
+      {data && !loading && showTaxScenario && (
         <section
           aria-label="Ước tính kịch bản thuế bán hàng"
           className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3"
@@ -168,7 +176,7 @@ export default function KPICards({
           </div>
         </section>
       )}
-      {comparison?.previous && data && (
+      {comparison?.previous && data && !loading && (
         <section
           aria-label="So sánh kỳ liền trước"
           className="mt-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
@@ -204,7 +212,7 @@ export default function KPICards({
           </div>
         </section>
       )}
-      {comparison?.unavailable && (
+      {comparison?.unavailable && !loading && (
         <p className="mt-3 rounded-lg border border-slate-200 bg-white px-4 py-3 text-xs text-slate-600">
           Chưa có đủ dữ liệu lịch sử để so sánh với một kỳ trước có cùng độ dài.
         </p>

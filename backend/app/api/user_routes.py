@@ -19,7 +19,12 @@ from app.core.auth import (
     hash_password,
     verify_password,
 )
-from app.core.cache import cache_key, get_cached_json, set_cached_json
+from app.core.cache import (
+    cache_key,
+    get_cached_json,
+    invalidate_dataset_cache,
+    set_cached_json,
+)
 from app.core.config import CURRENCY_CODE
 from app.core.persistence import Dataset, SaleRecord, SessionLocal, User
 
@@ -45,6 +50,10 @@ REQUIRED_COLUMNS = {
 class Credentials(BaseModel):
     email: str = Field(min_length=3, max_length=320)
     password: str = Field(min_length=12, max_length=256)
+
+
+class DatasetRename(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
 
 
 def require_database():
@@ -144,6 +153,40 @@ def list_datasets(
         .order_by(Dataset.is_sample.desc(), Dataset.created_at.desc())
     ).all()
     return [dataset_payload(dataset) for dataset in datasets]
+
+
+@router.patch("/datasets/{dataset_id}")
+def rename_dataset(
+    dataset_id: int,
+    payload: DatasetRename,
+    session: Session = Depends(db_session),
+    user: User = Depends(get_current_user),
+):
+    dataset = session.get(Dataset, dataset_id)
+    if dataset is None or dataset.is_sample or dataset.owner_id != user.id:
+        raise HTTPException(status_code=404, detail="Không tìm thấy dataset cá nhân.")
+    name = payload.name.strip()
+    if not name:
+        raise HTTPException(status_code=422, detail="Tên dataset không được để trống.")
+    dataset.name = name
+    session.commit()
+    session.refresh(dataset)
+    invalidate_dataset_cache(dataset_id)
+    return dataset_payload(dataset)
+
+
+@router.delete("/datasets/{dataset_id}", status_code=204)
+def delete_dataset(
+    dataset_id: int,
+    session: Session = Depends(db_session),
+    user: User = Depends(get_current_user),
+):
+    dataset = session.get(Dataset, dataset_id)
+    if dataset is None or dataset.is_sample or dataset.owner_id != user.id:
+        raise HTTPException(status_code=404, detail="Không tìm thấy dataset cá nhân.")
+    session.delete(dataset)
+    session.commit()
+    invalidate_dataset_cache(dataset_id)
 
 
 def parse_date(value: str) -> date:

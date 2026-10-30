@@ -102,6 +102,20 @@ export function fetchDatasets(token) {
   return authenticatedRequest("/api/datasets", token);
 }
 
+export function renameDataset(token, datasetId, name) {
+  return authenticatedRequest(`/api/datasets/${datasetId}`, token, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name }),
+  });
+}
+
+export function deleteDataset(token, datasetId) {
+  return authenticatedRequest(`/api/datasets/${datasetId}`, token, {
+    method: "DELETE",
+  });
+}
+
 export function uploadDataset(token, file) {
   const formData = new FormData();
   formData.append("file", file);

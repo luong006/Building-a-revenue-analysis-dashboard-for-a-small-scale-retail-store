@@ -47,6 +47,7 @@ Biến `VITE_API_BASE_URL` được nhúng khi build; sau khi đổi biến, c�
 3. API kiểm tra cột, kiểu dữ liệu, dòng trống, miền giá trị và transaction ID trùng trước khi ghi database.
 4. Dataset được tạo mới, gắn với chủ tài khoản; dashboard chỉ truy vấn dataset đang chọn.
 5. Redis lưu response phân tích tối đa 5 phút theo user, dataset và bộ lọc; PostgreSQL vẫn là nguồn dữ liệu chuẩn.
+6. Người dùng có thể đổi tên hoặc xóa dataset cá nhân; dataset Coffee mẫu không thể bị sửa/xóa từ giao diện. Lựa chọn dataset gần nhất được ghi trong trình duyệt theo user.
 
 Để cập nhật dataset mẫu, cập nhật CSV trong repository rồi cần có quy trình quản trị/migration riêng; không xóa dữ liệu mẫu đang có khi ứng dụng restart. Dataset người dùng tải lên không bị ghi đè bởi deploy.
 

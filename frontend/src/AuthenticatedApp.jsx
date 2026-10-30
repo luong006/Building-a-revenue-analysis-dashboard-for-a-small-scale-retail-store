@@ -5,6 +5,8 @@ import {
   fetchDatasets,
   loginAccount,
   registerAccount,
+  renameDataset,
+  deleteDataset,
   uploadDataset,
 } from "./services/api";
 import KPICards from "./components/KPICards";
@@ -204,6 +206,27 @@ function DashboardFilters({ filters, onChange, locations, categories, onReset, m
   );
 }
 
+function CollapsibleSection({ title, children }) {
+  const [isOpen, setIsOpen] = useState(
+    () => window.matchMedia("(min-width: 768px)").matches,
+  );
+  return (
+    <details
+      open={isOpen}
+      onToggle={(event) => setIsOpen(event.currentTarget.open)}
+      className="group"
+    >
+      <summary className="mb-3 flex cursor-pointer list-none items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-800 shadow-sm marker:hidden [&::-webkit-details-marker]:hidden">
+        {title}
+        <span aria-hidden="true" className="text-teal-800 transition-transform group-open:rotate-180">
+          ▾
+        </span>
+      </summary>
+      <div className="space-y-4">{children}</div>
+    </details>
+  );
+}
+
 export default function AuthenticatedApp() {
   const [token, setToken] = useState(() => sessionStorage.getItem("rp_access_token") || "");
   const [user, setUser] = useState(null);
@@ -216,6 +239,10 @@ export default function AuthenticatedApp() {
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
+  const [uploadSuccess, setUploadSuccess] = useState(null);
+  const [datasetActionBusy, setDatasetActionBusy] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const [datasetNameDraft, setDatasetNameDraft] = useState("");
 
   useEffect(() => {
     if (!token) {
@@ -228,10 +255,14 @@ export default function AuthenticatedApp() {
         if (cancelled) return;
         setUser(account);
         setDatasets(availableDatasets);
-        setDatasetId((current) =>
-          current && availableDatasets.some((item) => String(item.id) === current)
-            ? current
-            : String(availableDatasets[0]?.id || ""),
+        const savedDatasetId = localStorage.getItem(
+          `rp_dataset_id_${account.id}`,
+        );
+        const preferredDataset = availableDatasets.find(
+          (item) => String(item.id) === savedDatasetId,
+        );
+        setDatasetId(
+          String(preferredDataset?.id || availableDatasets[0]?.id || ""),
         );
         setError("");
       })
@@ -252,10 +283,13 @@ export default function AuthenticatedApp() {
     if (!token || !datasetId) return undefined;
     if (filters.startDate && filters.endDate && filters.startDate > filters.endDate) {
       setError("Ngày bắt đầu phải trước hoặc bằng ngày kết thúc.");
+      setDashboard(null);
+      setLoading(false);
       return undefined;
     }
     let cancelled = false;
     setLoading(true);
+    setDashboard(null);
     setError("");
     fetchDashboard(token, datasetId, filters, granularity)
       .then((result) => {
@@ -298,6 +332,7 @@ export default function AuthenticatedApp() {
     setDatasets([]);
     setDatasetId("");
     setDashboard(null);
+    setUploadSuccess(null);
   }
 
   async function onUpload(event) {
@@ -305,11 +340,18 @@ export default function AuthenticatedApp() {
     if (!file) return;
     setUploading(true);
     setError("");
+    setUploadSuccess(null);
     try {
       const created = await uploadDataset(token, file);
       setDatasets((current) => [created, ...current]);
       setDatasetId(String(created.id));
+      if (user) {
+        localStorage.setItem(`rp_dataset_id_${user.id}`, String(created.id));
+      }
       setFilters(EMPTY_FILTERS);
+      setDashboard(null);
+      setUploadSuccess(created);
+      setRenaming(false);
     } catch (uploadError) {
       setError(uploadError.message || "Không tải được CSV.");
     } finally {
@@ -337,6 +379,70 @@ export default function AuthenticatedApp() {
 
   const selectedDataset = datasets.find((item) => String(item.id) === datasetId);
   const metadata = dashboard?.metadata || selectedDataset;
+  const reportPeriod =
+    filters.startDate || filters.endDate
+      ? `${filters.startDate || metadata?.first_date || "Đầu kỳ"} – ${filters.endDate || metadata?.last_date || "Cuối kỳ"}`
+      : `${metadata?.first_date || "—"} – ${metadata?.last_date || "—"}`;
+
+  function selectDataset(id) {
+    setDatasetId(id);
+    if (user && id) localStorage.setItem(`rp_dataset_id_${user.id}`, id);
+    setFilters(EMPTY_FILTERS);
+    setDashboard(null);
+    setUploadSuccess(null);
+    setRenaming(false);
+  }
+
+  async function saveDatasetName(event) {
+    event.preventDefault();
+    if (!selectedDataset) return;
+    setDatasetActionBusy(true);
+    setError("");
+    try {
+      const updated = await renameDataset(
+        token,
+        selectedDataset.id,
+        datasetNameDraft,
+      );
+      setDatasets((current) =>
+        current.map((item) => (item.id === updated.id ? updated : item)),
+      );
+      setRenaming(false);
+    } catch (actionError) {
+      setError(actionError.message || "Không đổi được tên dataset.");
+    } finally {
+      setDatasetActionBusy(false);
+    }
+  }
+
+  async function removeDataset() {
+    if (!selectedDataset || selectedDataset.is_sample) return;
+    if (!window.confirm(`Xóa dataset "${selectedDataset.name}" và dữ liệu bên trong?`)) {
+      return;
+    }
+    setDatasetActionBusy(true);
+    setError("");
+    try {
+      await deleteDataset(token, selectedDataset.id);
+      const remaining = datasets.filter((item) => item.id !== selectedDataset.id);
+      setDatasets(remaining);
+      const nextDataset = remaining.find((item) => item.is_sample) || remaining[0];
+      setDatasetId(String(nextDataset?.id || ""));
+      if (user) {
+        if (nextDataset) {
+          localStorage.setItem(`rp_dataset_id_${user.id}`, String(nextDataset.id));
+        } else {
+          localStorage.removeItem(`rp_dataset_id_${user.id}`);
+        }
+      }
+      setDashboard(null);
+      setUploadSuccess(null);
+    } catch (actionError) {
+      setError(actionError.message || "Không xóa được dataset.");
+    } finally {
+      setDatasetActionBusy(false);
+    }
+  }
 
   return (
     <div className="flex min-h-screen flex-col bg-slate-50">
@@ -359,7 +465,10 @@ export default function AuthenticatedApp() {
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.16em] text-teal-800">Tổng quan bán hàng</p>
             <h2 className="mt-1 text-xl font-bold text-slate-900 sm:text-2xl">Doanh thu và hiệu suất sản phẩm</h2>
-            <p className="mt-1 text-sm text-slate-500">Số liệu được tính từ dataset bạn chọn · USD</p>
+              <p className="mt-1 text-sm text-slate-500">
+                Dataset: <strong className="text-slate-700">{selectedDataset?.name || "Chưa chọn"}</strong>
+                {" · "}Kỳ: {reportPeriod} · USD
+              </p>
           </div>
           {metadata && (
             <p className="text-xs text-slate-500">
@@ -377,9 +486,7 @@ export default function AuthenticatedApp() {
               className="mt-1.5 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800"
               value={datasetId}
               onChange={(event) => {
-                setDatasetId(event.target.value);
-                setFilters(EMPTY_FILTERS);
-                setDashboard(null);
+                selectDataset(event.target.value);
               }}
             >
               {datasets.map((item) => (
@@ -401,9 +508,63 @@ export default function AuthenticatedApp() {
           </label>
           <p className="basis-full text-xs leading-5 text-slate-500">
             CSV tối đa 25 MB, cần theo mẫu cột chuẩn. File tải lên chỉ thuộc tài khoản của bạn; đơn giá được hiểu là USD.
+            {" "}
+            <a className="font-semibold text-teal-800 underline" href="/csv-template.csv" download>
+              Tải CSV mẫu
+            </a>
+            {" "}Hãy xóa dòng ví dụ trước khi tải file của bạn lên.
           </p>
+          {selectedDataset && !selectedDataset.is_sample && (
+            <div className="flex w-full flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
+              {renaming ? (
+                <form className="flex min-w-0 flex-1 flex-wrap gap-2" onSubmit={saveDatasetName}>
+                  <input
+                    aria-label="Tên dataset mới"
+                    maxLength={120}
+                    required
+                    value={datasetNameDraft}
+                    onChange={(event) => setDatasetNameDraft(event.target.value)}
+                    className="h-9 min-w-[180px] flex-1 rounded-lg border border-slate-200 px-3 text-sm"
+                  />
+                  <button disabled={datasetActionBusy} className="rounded-lg bg-teal-800 px-3 py-2 text-xs font-semibold text-white disabled:opacity-60">
+                    Lưu tên
+                  </button>
+                  <button type="button" onClick={() => setRenaming(false)} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700">
+                    Hủy
+                  </button>
+                </form>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDatasetNameDraft(selectedDataset.name);
+                    setRenaming(true);
+                  }}
+                  className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  Đổi tên dataset
+                </button>
+              )}
+              <button
+                type="button"
+                disabled={datasetActionBusy}
+                onClick={removeDataset}
+                className="rounded-lg border border-rose-200 px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-60"
+              >
+                Xóa dataset
+              </button>
+            </div>
+          )}
         </section>
 
+        {uploadSuccess && (
+          <p className="rounded-lg border border-teal-200 bg-teal-50 px-4 py-3 text-sm text-teal-900" role="status">
+            Đã tải “{uploadSuccess.name}” thành công: {uploadSuccess.row_count.toLocaleString("vi-VN")} dòng
+            {uploadSuccess.first_date && uploadSuccess.last_date
+              ? ` · ${uploadSuccess.first_date} – ${uploadSuccess.last_date}`
+              : ""}.
+          </p>
+        )}
         {error && (
           <p className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800" role="alert">{error}</p>
         )}
@@ -425,33 +586,46 @@ export default function AuthenticatedApp() {
             Ngày bắt đầu phải trước hoặc bằng ngày kết thúc.
           </p>
         )}
-        <KPICards
-          data={dashboard?.summary}
-          loading={loading}
-          comparison={dashboard?.comparison || null}
-          showTaxScenario={selectedDataset?.is_sample}
-        />
-        <RevenueTrendChart
-          data={dashboard?.trend || []}
-          granularity={granularity}
-          onGranularityChange={setGranularity}
-          loading={loading}
-        />
-        <BreakdownCharts
-          categoryData={dashboard?.category_mix || []}
-          locationData={dashboard?.location_mix || []}
-          loading={loading}
-        />
-        <TimeAnalysisCharts
-          data={dashboard?.hourly || []}
-          dailyTrend={dashboard?.daily_trend || []}
-          loading={loading}
-        />
-        <TopProductRankings
-          revenueProducts={dashboard?.revenue_ranked || []}
-          quantityProducts={dashboard?.quantity_ranked || []}
-          loading={loading}
-        />
+        {loading && (
+          <p className="text-xs font-medium text-teal-800" role="status" aria-live="polite">
+            Đang cập nhật KPI và biểu đồ theo dataset/bộ lọc đã chọn…
+          </p>
+        )}
+        <CollapsibleSection title="Chỉ số tổng quan">
+          <KPICards
+            data={dashboard?.summary}
+            loading={loading}
+            comparison={dashboard?.comparison || null}
+            showTaxScenario={selectedDataset?.is_sample === true}
+          />
+        </CollapsibleSection>
+        <CollapsibleSection title="Xu hướng doanh thu và phân tích theo thời gian">
+          <RevenueTrendChart
+            data={dashboard?.trend || []}
+            granularity={granularity}
+            onGranularityChange={setGranularity}
+            loading={loading}
+          />
+          <TimeAnalysisCharts
+            data={dashboard?.hourly || []}
+            dailyTrend={dashboard?.daily_trend || []}
+            loading={loading}
+          />
+        </CollapsibleSection>
+        <CollapsibleSection title="Cơ cấu doanh thu">
+          <BreakdownCharts
+            categoryData={dashboard?.category_mix || []}
+            locationData={dashboard?.location_mix || []}
+            loading={loading}
+          />
+        </CollapsibleSection>
+        <CollapsibleSection title="Xếp hạng sản phẩm">
+          <TopProductRankings
+            revenueProducts={dashboard?.revenue_ranked || []}
+            quantityProducts={dashboard?.quantity_ranked || []}
+            loading={loading}
+          />
+        </CollapsibleSection>
         <aside className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs leading-5 text-slate-600">
           <span className="font-semibold text-slate-800">Lưu ý:</span>{" "}
           Doanh thu là giá trị bán hàng (số lượng × đơn giá), không phải lợi nhuận.

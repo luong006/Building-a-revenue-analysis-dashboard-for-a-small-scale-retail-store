@@ -65,6 +65,8 @@ Các endpoint phân tích nhận bộ lọc tùy chọn `location`, `category`, 
 | `GET /api/auth/me` | Tài khoản hiện tại |
 | `GET /api/datasets` | Dataset mẫu và dataset thuộc tài khoản |
 | `POST /api/datasets/upload` | Validate CSV và lưu dataset riêng (25 MB, tối đa 250.000 dòng) |
+| `PATCH /api/datasets/{id}` | Đổi tên dataset cá nhân của chủ sở hữu |
+| `DELETE /api/datasets/{id}` | Xóa dataset cá nhân và các giao dịch thuộc dataset |
 | `GET /api/datasets/{id}/dashboard` | Dashboard theo dataset; cần access token trong header Authorization |
 | `GET /api/cache-status` | Trạng thái kết nối Redis |
 | `GET /healthz` | Liveness probe cho Render; không phụ thuộc dataset |

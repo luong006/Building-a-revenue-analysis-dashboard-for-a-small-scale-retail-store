@@ -8,7 +8,14 @@ from fastapi import HTTPException
 from sqlalchemy import create_engine, event, select
 from sqlalchemy.orm import Session
 
-from app.api.user_routes import dashboard_data, get_visible_dataset, parse_csv
+from app.api.user_routes import (
+    DatasetRename,
+    dashboard_data,
+    delete_dataset,
+    get_visible_dataset,
+    parse_csv,
+    rename_dataset,
+)
 from app.core.auth import hash_password, verify_password
 from app.core.cache import cache_key
 from app.core.persistence import Base, Dataset, SaleRecord, User
@@ -88,6 +95,56 @@ class UserDatasetTests(unittest.TestCase):
             with self.assertRaises(HTTPException) as raised:
                 get_visible_dataset(session, private_dataset.id, stranger)
             self.assertEqual(raised.exception.status_code, 404)
+
+    def test_only_owner_can_rename_or_delete_personal_datasets(self):
+        engine = create_engine("sqlite://")
+        Base.metadata.create_all(engine)
+        with Session(engine) as session:
+            owner = User(email="owner-actions@example.com", password_hash="hash")
+            stranger = User(email="stranger-actions@example.com", password_hash="hash")
+            session.add_all([owner, stranger])
+            session.flush()
+            personal = Dataset(
+                owner_id=owner.id,
+                name="old",
+                row_count=0,
+                currency_code="USD",
+                is_sample=False,
+            )
+            sample = Dataset(
+                owner_id=None,
+                name="sample",
+                row_count=0,
+                currency_code="USD",
+                is_sample=True,
+            )
+            session.add_all([personal, sample])
+            session.flush()
+
+            with self.assertRaises(HTTPException) as raised:
+                rename_dataset(
+                    personal.id,
+                    DatasetRename(name="stolen"),
+                    session,
+                    stranger,
+                )
+            self.assertEqual(raised.exception.status_code, 404)
+
+            with self.assertRaises(HTTPException) as raised:
+                delete_dataset(sample.id, session, owner)
+            self.assertEqual(raised.exception.status_code, 404)
+
+            renamed = rename_dataset(
+                personal.id,
+                DatasetRename(name="new"),
+                session,
+                owner,
+            )
+            self.assertEqual(renamed["name"], "new")
+            delete_dataset(personal.id, session, owner)
+            self.assertIsNone(session.get(Dataset, personal.id))
+
+        engine.dispose()
 
     def test_cache_identity_is_scoped_to_user_and_parameters(self):
         filters = {"category": "Coffee", "start_date": "2023-01-01"}
