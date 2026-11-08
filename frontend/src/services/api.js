@@ -1,11 +1,37 @@
 const API_BASE_URL = (
   import.meta.env.VITE_API_BASE_URL || "http://localhost:8000"
 ).replace(/\/+$/, "");
+const API_TIMEOUT_MS = 90_000;
+
+async function requestJSON(url, options = {}) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+    const body = await response.json().catch(() => null);
+    return { response, body };
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw new Error(
+        "Backend không phản hồi sau 90 giây. Hãy kiểm tra dịch vụ Render rồi thử lại.",
+      );
+    }
+    throw new Error(
+      "Không kết nối được backend. Hãy kiểm tra dịch vụ Render và kết nối mạng rồi thử lại.",
+      { cause: error },
+    );
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
 
 async function getJSON(path) {
-  const response = await fetch(`${API_BASE_URL}${path}`);
+  const { response, body } = await requestJSON(`${API_BASE_URL}${path}`);
   if (!response.ok) {
-    const body = await response.json().catch(() => null);
     const detail = body?.detail;
     const message =
       typeof detail === "string"
@@ -13,7 +39,7 @@ async function getJSON(path) {
         : detail?.message || response.statusText;
     throw new Error(`API request failed (${response.status}): ${message}`);
   }
-  return response.json();
+  return body;
 }
 
 function buildQuery({ location, category, startDate, endDate, limit, granularity, sortBy } = {}) {
@@ -64,11 +90,10 @@ export function fetchDatasetMetadata() {
 async function authenticatedRequest(path, token, options = {}) {
   const headers = new Headers(options.headers || {});
   headers.set("Authorization", `Bearer ${token}`);
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const { response, body } = await requestJSON(`${API_BASE_URL}${path}`, {
     ...options,
     headers,
   });
-  const body = await response.json().catch(() => null);
   if (!response.ok) {
     const detail = body?.detail;
     throw new Error(
@@ -116,9 +141,35 @@ export function deleteDataset(token, datasetId) {
   });
 }
 
-export function uploadDataset(token, file) {
+export function previewDataset(token, file, options = {}) {
   const formData = new FormData();
   formData.append("file", file);
+  if (options.amountSource) {
+    formData.append("amount_source", options.amountSource);
+  }
+  if (options.dateFormat) {
+    formData.append("date_format", options.dateFormat);
+  }
+  return authenticatedRequest("/api/datasets/preview", token, {
+    method: "POST",
+    body: formData,
+  });
+}
+
+export function uploadDataset(token, file, options = {}) {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("amount_source", options.amountSource || "");
+  formData.append("date_format", options.dateFormat || "auto");
+  formData.append("currency_code", options.currencyCode || "unknown");
+  formData.append(
+    "deduplicate_exact",
+    options.deduplicateExact ? "true" : "false",
+  );
+  formData.append(
+    "drop_invalid_rows",
+    options.dropInvalidRows ? "true" : "false",
+  );
   return authenticatedRequest("/api/datasets/upload", token, {
     method: "POST",
     body: formData,

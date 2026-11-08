@@ -305,6 +305,76 @@ class UserDatasetTests(unittest.TestCase):
         )
         self.assertEqual(result["comparison"]["previous"]["total_revenue"], 6.0)
 
+    def test_dashboard_supports_missing_time_and_source_reported_revenue(self):
+        engine = create_engine("sqlite://")
+
+        def date_trunc(granularity, value):
+            current_date = date.fromisoformat(value[:10])
+            if granularity == "month":
+                current_date = current_date.replace(day=1)
+            return current_date.isoformat()
+
+        event.listen(
+            engine,
+            "connect",
+            lambda connection, _: connection.create_function(
+                "date_trunc", 2, date_trunc
+            ),
+        )
+        Base.metadata.create_all(engine)
+        with Session(engine) as session:
+            owner = User(email="missing-time@example.com", password_hash="hash")
+            session.add(owner)
+            session.flush()
+            dataset = Dataset(
+                owner_id=owner.id,
+                name="retail source amount",
+                row_count=1,
+                first_date=date(2024, 1, 2),
+                last_date=date(2024, 1, 2),
+                currency_code=None,
+                source_format="custom_sales",
+                amount_source="total_spent",
+                is_sample=False,
+            )
+            session.add(dataset)
+            session.flush()
+            session.add(
+                SaleRecord(
+                    dataset_id=dataset.id,
+                    transaction_id="TXN-1",
+                    transaction_date=date(2024, 1, 2),
+                    transaction_time=None,
+                    transaction_qty=2,
+                    store_id=None,
+                    store_location="Online",
+                    product_id=None,
+                    unit_price=3.0,
+                    line_revenue=19.0,
+                    product_category="Coffee",
+                    product_type="Latte",
+                    product_detail="Latte",
+                )
+            )
+            session.flush()
+
+            result = dashboard_data(
+                session,
+                dataset,
+                {
+                    "location": None,
+                    "category": None,
+                    "start_date": None,
+                    "end_date": None,
+                    "granularity": "day",
+                },
+            )
+
+        engine.dispose()
+        self.assertEqual(result["hourly"], [])
+        self.assertEqual(result["summary"]["total_revenue"], 19.0)
+        self.assertIsNone(result["metadata"]["currency_code"])
+
 
 if __name__ == "__main__":
     unittest.main()

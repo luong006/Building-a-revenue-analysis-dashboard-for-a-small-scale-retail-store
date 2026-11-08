@@ -6,10 +6,11 @@ export default function DashboardInsights({
   dashboard,
   granularity,
   loading,
+  currencyCode,
 }) {
   const insights = useMemo(
-    () => buildDashboardInsights(dashboard, granularity),
-    [dashboard, granularity],
+    () => buildDashboardInsights(dashboard, granularity, currencyCode),
+    [dashboard, granularity, currencyCode],
   );
 
   return (

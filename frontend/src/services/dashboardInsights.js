@@ -1,9 +1,4 @@
-const usd = (value) =>
-  new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: 2,
-  }).format(Number(value || 0));
+import { formatMoney } from "./formatMoney";
 
 function percentage(value) {
   return `${Number(value || 0).toFixed(1)}%`;
@@ -23,7 +18,7 @@ function periodLabel(period, granularity) {
   }).format(date);
 }
 
-export function buildDashboardInsights(dashboard, granularity) {
+export function buildDashboardInsights(dashboard, granularity, currencyCode) {
   if (!dashboard?.summary || !dashboard.summary.total_revenue) return [];
 
   const insights = [];
@@ -31,7 +26,7 @@ export function buildDashboardInsights(dashboard, granularity) {
   if (topProduct) {
     insights.push({
       id: "top-product",
-      text: `${topProduct.product} đứng đầu bảng xếp hạng doanh thu với ${usd(topProduct.total_revenue)}, chiếm ${percentage(topProduct.revenue_share_pct)} doanh thu trong phạm vi lọc.`,
+      text: `${topProduct.product} đứng đầu bảng xếp hạng doanh thu với ${formatMoney(topProduct.total_revenue, currencyCode)}, chiếm ${percentage(topProduct.revenue_share_pct)} doanh thu trong phạm vi lọc.`,
     });
   }
 
@@ -42,7 +37,7 @@ export function buildDashboardInsights(dashboard, granularity) {
   if (peakHour) {
     insights.push({
       id: "peak-hour",
-      text: `Khung ${peakHour.label} ghi nhận doanh thu cao nhất theo giờ: ${usd(peakHour.revenue)}.`,
+      text: `Khung ${peakHour.label} ghi nhận doanh thu cao nhất theo giờ: ${formatMoney(peakHour.revenue, currencyCode)}.`,
     });
   }
 
@@ -53,7 +48,7 @@ export function buildDashboardInsights(dashboard, granularity) {
   if (peakPeriod) {
     insights.push({
       id: "peak-period",
-      text: `${granularity === "month" ? "Tháng" : "Ngày"} ${periodLabel(peakPeriod.period, granularity)} có doanh thu cao nhất trong chuỗi đang hiển thị: ${usd(peakPeriod.revenue)}.`,
+      text: `${granularity === "month" ? "Tháng" : "Ngày"} ${periodLabel(peakPeriod.period, granularity)} có doanh thu cao nhất trong chuỗi đang hiển thị: ${formatMoney(peakPeriod.revenue, currencyCode)}.`,
     });
   }
 
@@ -68,7 +63,7 @@ export function buildDashboardInsights(dashboard, granularity) {
       : "không thể tính phần trăm vì doanh thu kỳ trước bằng 0";
     insights.push({
       id: "period-comparison",
-      text: `Doanh thu kỳ hiện tại ${difference >= 0 ? "cao hơn" : "thấp hơn"} ${usd(Math.abs(difference))} (${comparisonText}).`,
+      text: `Doanh thu kỳ hiện tại ${difference >= 0 ? "cao hơn" : "thấp hơn"} ${formatMoney(Math.abs(difference), currencyCode)} (${comparisonText}).`,
     });
   }
 

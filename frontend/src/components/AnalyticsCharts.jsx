@@ -22,14 +22,9 @@ import {
   Tags,
   TrendingUp,
 } from "lucide-react";
+import { formatCompactMoney, formatMoney } from "../services/formatMoney";
 
 const COLORS = ["#0f766e", "#14b8a6", "#2dd4bf", "#0e7490", "#38bdf8", "#64748b", "#a3e635"];
-const usd = (value) =>
-  new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: 2,
-  }).format(Number(value || 0));
 const number = (value) => Number(value || 0).toLocaleString("en-US");
 
 function Panel({ title, subtitle, icon: Icon, action, children, className = "" }) {
@@ -65,13 +60,13 @@ function ChartEmpty({ loading, message = "Không có kết quả với bộ lọ
   );
 }
 
-function SalesTooltip({ active, payload, label }) {
+function SalesTooltip({ active, payload, label, currencyCode }) {
   if (!active || !payload?.length) return null;
   const row = payload[0].payload;
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-3 text-xs shadow-lg">
       <p className="mb-2 font-semibold text-slate-900">{label}</p>
-      <p className="text-teal-800">Doanh thu: {usd(row.revenue)}</p>
+      <p className="text-teal-800">Doanh thu: {formatMoney(row.revenue, currencyCode)}</p>
       {row.transactions !== undefined && (
         <p className="mt-1 text-slate-600">
         Mã giao dịch nguồn duy nhất: {number(row.transactions)}
@@ -104,6 +99,7 @@ export function RevenueTrendChart({
   granularity,
   onGranularityChange,
   loading,
+  currencyCode,
 }) {
   const trendData = useMemo(
     () =>
@@ -150,7 +146,7 @@ export function RevenueTrendChart({
       {loading || !trendData.length ? (
         <ChartEmpty loading={loading} message="Không có doanh thu trong khoảng ngày này." />
       ) : (
-        <div className="h-72 w-full" role="img" aria-label="Biểu đồ xu hướng doanh thu USD">
+        <div className="h-72 w-full" role="img" aria-label={`Biểu đồ xu hướng doanh thu, đơn vị ${currencyCode || "chưa xác định"}`}>
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={trendData} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
               <defs>
@@ -172,7 +168,7 @@ export function RevenueTrendChart({
                 axisLine={false}
                 tickLine={false}
                 tickFormatter={(value) =>
-                  value >= 1000 ? `$${(value / 1000).toFixed(0)}k` : `$${value}`
+                  formatCompactMoney(value, currencyCode)
                 }
                 width={58}
               />
@@ -180,7 +176,7 @@ export function RevenueTrendChart({
                 labelFormatter={(_, payload) =>
                   payload?.[0]?.payload?.period || ""
                 }
-                content={<SalesTooltip />}
+                content={<SalesTooltip currencyCode={currencyCode} />}
               />
               <Area
                 type="monotone"
@@ -207,6 +203,7 @@ function MixChart({
   loading,
   selectedName,
   onSelect,
+  currencyCode,
 }) {
   const chartData = data.filter((item) => item.revenue > 0);
   const totalRevenue = chartData.reduce((sum, item) => sum + item.revenue, 0);
@@ -217,7 +214,7 @@ function MixChart({
         <ChartEmpty loading={loading} message="Không có dữ liệu bán hàng để phân tích cơ cấu." />
       ) : (
         <div className="grid min-h-64 grid-cols-1 items-center gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(130px,0.8fr)]">
-          <div className="h-60 min-w-0" role="img" aria-label={`${title}, đơn vị USD`}>
+          <div className="h-60 min-w-0" role="img" aria-label={`${title}, đơn vị ${currencyCode || "chưa xác định"}`}>
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
@@ -244,7 +241,7 @@ function MixChart({
                     />
                   ))}
                 </Pie>
-                <Tooltip formatter={(value) => [usd(value), "Doanh thu"]} />
+                <Tooltip formatter={(value) => [formatMoney(value, currencyCode), "Doanh thu"]} />
               </PieChart>
             </ResponsiveContainer>
           </div>
@@ -269,7 +266,7 @@ function MixChart({
                 </span>
                 <span className="shrink-0 text-right">
                   <strong className="block font-semibold text-slate-900">
-                    {usd(item.revenue)} ·{" "}
+                    {formatMoney(item.revenue, currencyCode)} ·{" "}
                     {totalRevenue
                       ? ((item.revenue / totalRevenue) * 100).toFixed(1)
                       : "0.0"}
@@ -301,26 +298,31 @@ export function BreakdownCharts({
   selectedLocation,
   onCategorySelect,
   onLocationSelect,
+  currencyCode,
+  locationLabel = "địa điểm",
+  hasNegativeAmounts = false,
 }) {
   return (
     <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
       <MixChart
         title="Cơ cấu doanh thu theo danh mục"
-        subtitle="Tỷ trọng doanh thu từng danh mục theo bộ lọc địa điểm và ngày."
+        subtitle={`Tỷ trọng doanh thu theo danh mục trong bộ lọc ngày và địa điểm/kênh bán.${hasNegativeAmounts ? " Biểu đồ chỉ thể hiện nhóm có giá trị dương; KPI tổng vẫn giữ các giá trị âm." : ""}`}
         icon={Tags}
         data={categoryData}
         loading={loading}
         selectedName={selectedCategory}
         onSelect={onCategorySelect}
+        currencyCode={currencyCode}
       />
       <MixChart
-        title="Cơ cấu doanh thu theo địa điểm"
-        subtitle="Tỷ trọng doanh thu từng địa điểm theo bộ lọc danh mục và ngày."
+        title={`Cơ cấu doanh thu theo ${locationLabel}`}
+        subtitle={`Tỷ trọng doanh thu theo ${locationLabel}.${hasNegativeAmounts ? " Biểu đồ chỉ thể hiện nhóm có giá trị dương; KPI tổng vẫn giữ các giá trị âm." : ""}`}
         icon={MapPin}
         data={locationData}
         loading={loading}
         selectedName={selectedLocation}
         onSelect={onLocationSelect}
+        currencyCode={currencyCode}
       />
     </div>
   );
@@ -336,7 +338,13 @@ const WEEKDAYS = [
   { index: 0, label: "Chủ nhật" },
 ];
 
-export function TimeAnalysisCharts({ data = [], dailyTrend = [], loading }) {
+export function TimeAnalysisCharts({
+  data = [],
+  dailyTrend = [],
+  loading,
+  currencyCode,
+  hasTransactionTime = true,
+}) {
   const weekdayData = useMemo(() => {
     const totals = new Map(
       WEEKDAYS.map(({ index }) => [
@@ -382,9 +390,16 @@ export function TimeAnalysisCharts({ data = [], dailyTrend = [], loading }) {
         icon={Clock3}
       >
         {loading || !data.length ? (
-          <ChartEmpty loading={loading} message="Không có dữ liệu theo giờ với bộ lọc này." />
+          <ChartEmpty
+            loading={loading}
+            message={
+              hasTransactionTime
+                ? "Không có dữ liệu theo giờ với bộ lọc này."
+                : "Dataset không có cột giờ giao dịch nên không thể phân tích doanh thu theo giờ."
+            }
+          />
         ) : (
-          <div className="h-64 w-full" role="img" aria-label="Biểu đồ doanh thu theo giờ bằng USD">
+          <div className="h-64 w-full" role="img" aria-label={`Biểu đồ doanh thu theo giờ, đơn vị ${currencyCode || "chưa xác định"}`}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: -12 }}>
                 <CartesianGrid stroke="#e9eef2" strokeDasharray="3 4" vertical={false} />
@@ -400,11 +415,11 @@ export function TimeAnalysisCharts({ data = [], dailyTrend = [], loading }) {
                   axisLine={false}
                   tickLine={false}
                   tickFormatter={(value) =>
-                    value >= 1000 ? `$${(value / 1000).toFixed(0)}k` : `$${value}`
+                    formatCompactMoney(value, currencyCode)
                   }
                   width={55}
                 />
-                <Tooltip content={<SalesTooltip />} />
+                <Tooltip content={<SalesTooltip currencyCode={currencyCode} />} />
                 <Bar dataKey="revenue" name="Doanh thu" fill="#14b8a6" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
@@ -419,7 +434,7 @@ export function TimeAnalysisCharts({ data = [], dailyTrend = [], loading }) {
         {loading || !dailyTrend.length ? (
           <ChartEmpty loading={loading} message="Không có dữ liệu theo ngày với bộ lọc này." />
         ) : (
-          <div className="h-64 w-full" role="img" aria-label="Biểu đồ doanh thu bình quân theo thứ bằng USD">
+          <div className="h-64 w-full" role="img" aria-label={`Biểu đồ doanh thu bình quân theo thứ, đơn vị ${currencyCode || "chưa xác định"}`}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={weekdayData} margin={{ top: 8, right: 8, bottom: 0, left: -12 }}>
                 <CartesianGrid stroke="#e9eef2" strokeDasharray="3 4" vertical={false} />
@@ -429,11 +444,11 @@ export function TimeAnalysisCharts({ data = [], dailyTrend = [], loading }) {
                   axisLine={false}
                   tickLine={false}
                   tickFormatter={(value) =>
-                    value >= 1000 ? `$${(value / 1000).toFixed(0)}k` : `$${value}`
+                    formatCompactMoney(value, currencyCode)
                   }
                   width={55}
                 />
-                <Tooltip content={<SalesTooltip />} />
+                <Tooltip content={<SalesTooltip currencyCode={currencyCode} />} />
                 <Bar dataKey="revenue" name="Bình quân/ngày" fill="#0e7490" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
@@ -444,7 +459,7 @@ export function TimeAnalysisCharts({ data = [], dailyTrend = [], loading }) {
   );
 }
 
-function RankingTable({ title, subtitle, products, mode }) {
+function RankingTable({ title, subtitle, products, mode, currencyCode }) {
   const quantityMode = mode === "quantity";
   return (
     <Panel
@@ -486,7 +501,7 @@ function RankingTable({ title, subtitle, products, mode }) {
                     {number(product.quantity_sold)}
                   </td>
                   <td className="whitespace-nowrap px-2 py-3 text-right font-semibold text-slate-900">
-                    {usd(product.total_revenue)}
+                    {formatMoney(product.total_revenue, currencyCode)}
                   </td>
                   {!quantityMode && (
                     <td className="whitespace-nowrap px-2 py-3 text-right font-semibold text-teal-800">
@@ -507,6 +522,7 @@ export function TopProductRankings({
   revenueProducts = [],
   quantityProducts = [],
   loading,
+  currencyCode,
 }) {
   if (loading) {
     return (
@@ -522,12 +538,14 @@ export function TopProductRankings({
         subtitle="Xếp hạng theo giá trị bán hàng ghi nhận trong kỳ."
         products={revenueProducts}
         mode="revenue"
+        currencyCode={currencyCode}
       />
       <RankingTable
         title="Sản phẩm theo số lượng"
         subtitle="Xếp hạng độc lập theo số lượng bán ra."
         products={quantityProducts}
         mode="quantity"
+        currencyCode={currencyCode}
       />
     </div>
   );

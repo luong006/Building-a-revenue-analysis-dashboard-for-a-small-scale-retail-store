@@ -1,12 +1,9 @@
-import csv
-import io
-import math
+import json
 import re
 from datetime import date, datetime, time, timedelta
-from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy import distinct, extract, func, insert, select
 from sqlalchemy.exc import IntegrityError
@@ -25,26 +22,14 @@ from app.core.cache import (
     invalidate_dataset_cache,
     set_cached_json,
 )
-from app.core.config import CURRENCY_CODE
+from app.core.data_import import normalize_csv, preview_csv
 from app.core.persistence import Dataset, SaleRecord, SessionLocal, User
 
 
 router = APIRouter(prefix="/api", tags=["Accounts and datasets"])
 MAX_UPLOAD_BYTES = 25 * 1024 * 1024
 MAX_UPLOAD_ROWS = 250_000
-REQUIRED_COLUMNS = {
-    "transaction_id",
-    "transaction_date",
-    "transaction_time",
-    "transaction_qty",
-    "store_id",
-    "store_location",
-    "product_id",
-    "unit_price",
-    "product_category",
-    "product_type",
-    "product_detail",
-}
+UNKNOWN_LOCATION = "Chưa xác định"
 
 
 class Credentials(BaseModel):
@@ -129,6 +114,11 @@ def dataset_payload(dataset: Dataset):
         "first_date": dataset.first_date.isoformat() if dataset.first_date else None,
         "last_date": dataset.last_date.isoformat() if dataset.last_date else None,
         "currency_code": dataset.currency_code,
+        "source_format": dataset.source_format,
+        "amount_source": dataset.amount_source,
+        "quality_report": (
+            json.loads(dataset.quality_report) if dataset.quality_report else None
+        ),
         "is_sample": dataset.is_sample,
         "created_at": dataset.created_at.isoformat(),
     }
@@ -212,98 +202,25 @@ def parse_time(value: str) -> time:
     raise ValueError("giờ không đúng định dạng")
 
 
-def parse_csv(contents: bytes):
-    try:
-        text = contents.decode("utf-8-sig")
-    except UnicodeDecodeError as error:
-        raise HTTPException(
-            status_code=422, detail="CSV phải được mã hóa UTF-8."
-        ) from error
-    reader = csv.DictReader(io.StringIO(text))
-    headers = set(reader.fieldnames or [])
-    missing = REQUIRED_COLUMNS - headers
-    if missing:
-        raise HTTPException(
-            status_code=422,
-            detail=f"CSV thiếu cột bắt buộc: {', '.join(sorted(missing))}.",
-        )
-
-    records = []
-    seen_ids = set()
-    first_date = None
-    last_date = None
-    for line_number, row in enumerate(reader, start=2):
-        if line_number > MAX_UPLOAD_ROWS + 1:
-            raise HTTPException(
-                status_code=413,
-                detail=f"CSV vượt giới hạn {MAX_UPLOAD_ROWS:,} dòng.",
-            )
-        try:
-            transaction_id = int(row["transaction_id"])
-            sale_date = parse_date(row["transaction_date"])
-            sale_time = parse_time(row["transaction_time"])
-            quantity = int(row["transaction_qty"])
-            store_id = int(row["store_id"])
-            product_id = int(row["product_id"])
-            unit_price = Decimal((row.get("unit_price") or "").strip())
-            price_value = float(unit_price)
-            location = (row.get("store_location") or "").strip()
-            category = (row.get("product_category") or "").strip()
-            product_type = (row.get("product_type") or "").strip()
-            product_detail = (row["product_detail"] or "").strip()
-            if (
-                transaction_id in seen_ids
-                or transaction_id < 0
-                or quantity <= 0
-                or store_id < 0
-                or product_id < 0
-                or not unit_price.is_finite()
-                or not math.isfinite(price_value)
-                or unit_price < 0
-                or not location
-                or not category
-                or not product_type
-                or not (product_detail or product_type)
-                or len(location) > 160
-                or len(category) > 160
-                or len(product_type) > 200
-                or len(product_detail) > 300
-            ):
-                raise ValueError("dữ liệu không hợp lệ hoặc mã giao dịch bị trùng")
-        except (ValueError, TypeError, InvalidOperation, KeyError) as error:
-            raise HTTPException(
-                status_code=422,
-                detail=f"Dòng {line_number} không hợp lệ ({error}).",
-            ) from error
-        seen_ids.add(transaction_id)
-        first_date = min(first_date, sale_date) if first_date else sale_date
-        last_date = max(last_date, sale_date) if last_date else sale_date
-        records.append(
-            {
-                "transaction_id": transaction_id,
-                "transaction_date": sale_date,
-                "transaction_time": sale_time,
-                "transaction_qty": quantity,
-                "store_id": store_id,
-                "store_location": location,
-                "product_id": product_id,
-                "unit_price": price_value,
-                "product_category": category,
-                "product_type": product_type,
-                "product_detail": product_detail,
-            }
-        )
-    if not records:
-        raise HTTPException(status_code=422, detail="CSV không có dòng dữ liệu.")
-    return records, first_date, last_date
-
-
-@router.post("/datasets/upload", status_code=201)
-async def upload_dataset(
-    file: UploadFile = File(...),
-    session: Session = Depends(db_session),
-    user: User = Depends(get_current_user),
+def parse_csv(
+    contents: bytes,
+    amount_source: str | None = None,
+    deduplicate_exact: bool = False,
+    drop_invalid_rows: bool = False,
 ):
+    try:
+        records, first_date, last_date, _ = normalize_csv(
+            contents,
+            amount_source=amount_source,
+            deduplicate_exact=deduplicate_exact,
+            drop_invalid_rows=drop_invalid_rows,
+        )
+        return records, first_date, last_date
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+
+
+async def read_upload(file: UploadFile):
     if Path(file.filename or "").suffix.lower() != ".csv":
         raise HTTPException(status_code=415, detail="Chỉ hỗ trợ file .csv.")
     contents = await file.read(MAX_UPLOAD_BYTES + 1)
@@ -311,7 +228,57 @@ async def upload_dataset(
         raise HTTPException(
             status_code=413, detail="File vượt giới hạn tải lên 25 MB."
         )
-    records, first_date, last_date = parse_csv(contents)
+    return contents
+
+
+@router.post("/datasets/preview")
+async def preview_dataset(
+    file: UploadFile = File(...),
+    amount_source: str | None = Form(default=None),
+    date_format: str = Form(default="auto"),
+    user: User = Depends(get_current_user),
+):
+    del user
+    contents = await read_upload(file)
+    try:
+        return preview_csv(
+            contents, amount_source=amount_source, date_format=date_format
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+
+
+@router.post("/datasets/upload", status_code=201)
+async def upload_dataset(
+    file: UploadFile = File(...),
+    amount_source: str | None = Form(default=None),
+    date_format: str = Form(default="auto"),
+    currency_code: str = Form(default="unknown"),
+    deduplicate_exact: bool = Form(default=False),
+    drop_invalid_rows: bool = Form(default=False),
+    session: Session = Depends(db_session),
+    user: User = Depends(get_current_user),
+):
+    contents = await read_upload(file)
+    try:
+        records, first_date, last_date, quality_report = normalize_csv(
+            contents,
+            amount_source=amount_source,
+            deduplicate_exact=deduplicate_exact,
+            drop_invalid_rows=drop_invalid_rows,
+            date_format=date_format,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    if currency_code == "unknown":
+        resolved_currency = None
+    elif re.fullmatch(r"[A-Z]{3}", currency_code):
+        resolved_currency = currency_code
+    else:
+        raise HTTPException(
+            status_code=422,
+            detail="Mã tiền tệ phải là mã ISO gồm 3 chữ in hoa hoặc chọn chưa xác định.",
+        )
     clean_name = Path(file.filename or "dataset.csv").stem.strip()[:120]
     dataset = Dataset(
         owner_id=user.id,
@@ -319,7 +286,10 @@ async def upload_dataset(
         row_count=len(records),
         first_date=first_date,
         last_date=last_date,
-        currency_code=CURRENCY_CODE or "USD",
+        currency_code=resolved_currency,
+        source_format=quality_report["source_format"],
+        amount_source=quality_report["amount_source"],
+        quality_report=json.dumps(quality_report, ensure_ascii=False),
         is_sample=False,
     )
     session.add(dataset)
@@ -340,7 +310,11 @@ async def upload_dataset(
 def filter_conditions(dataset_id, location, category, start_date, end_date):
     conditions = [SaleRecord.dataset_id == dataset_id]
     if location:
-        conditions.append(SaleRecord.store_location == location)
+        conditions.append(
+            SaleRecord.store_location.is_(None)
+            if location == UNKNOWN_LOCATION
+            else SaleRecord.store_location == location
+        )
     if category:
         conditions.append(SaleRecord.product_category == category)
     if start_date:
@@ -351,9 +325,11 @@ def filter_conditions(dataset_id, location, category, start_date, end_date):
 
 
 def summary_for(session, conditions):
-    revenue = func.coalesce(
-        func.sum(SaleRecord.transaction_qty * SaleRecord.unit_price), 0
+    line_amount = func.coalesce(
+        SaleRecord.line_revenue,
+        SaleRecord.transaction_qty * SaleRecord.unit_price,
     )
+    revenue = func.coalesce(func.sum(line_amount), 0)
     transactions = func.count(distinct(SaleRecord.transaction_id))
     quantity = func.coalesce(func.sum(SaleRecord.transaction_qty), 0)
     row = session.execute(
@@ -382,11 +358,14 @@ def dashboard_data(session, dataset, filters):
         filters["start_date"],
         filters["end_date"],
     )
-    total = SaleRecord.transaction_qty * SaleRecord.unit_price
+    total = func.coalesce(
+        SaleRecord.line_revenue,
+        SaleRecord.transaction_qty * SaleRecord.unit_price,
+    )
     summary = summary_for(session, base)
 
     locations = session.scalars(
-        select(SaleRecord.store_location)
+        select(func.coalesce(SaleRecord.store_location, UNKNOWN_LOCATION))
         .distinct()
         .where(SaleRecord.dataset_id == dataset.id)
         .order_by(SaleRecord.store_location)
@@ -405,7 +384,7 @@ def dashboard_data(session, dataset, filters):
             func.count(distinct(SaleRecord.transaction_id)),
             func.sum(SaleRecord.transaction_qty),
         )
-        .where(*base)
+        .where(*base, SaleRecord.transaction_time.is_not(None))
         .group_by("hour")
         .order_by("hour")
     ).all()
@@ -515,16 +494,21 @@ def dashboard_data(session, dataset, filters):
             filters["start_date"],
             filters["end_date"],
         )
+        grouped_column = (
+            func.coalesce(column, UNKNOWN_LOCATION)
+            if dimension == "location"
+            else column
+        )
         rows = session.execute(
             select(
-                column,
+                grouped_column,
                 func.sum(total),
                 func.sum(SaleRecord.transaction_qty),
                 func.count(distinct(SaleRecord.transaction_id)),
             )
             .where(*conditions)
-            .group_by(column)
-            .order_by(column)
+            .group_by(grouped_column)
+            .order_by(grouped_column)
         ).all()
         return [
             {

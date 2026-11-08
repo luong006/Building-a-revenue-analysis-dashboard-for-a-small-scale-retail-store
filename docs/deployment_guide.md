@@ -43,8 +43,8 @@ Biến `VITE_API_BASE_URL` được nhúng khi build; sau khi đổi biến, c�
 ## 3. Quản lý dữ liệu
 
 1. Người dùng đăng nhập và chọn dataset mẫu hoặc một dataset đã tải lên trước đó.
-2. Tải CSV UTF-8 theo schema chuẩn trong [`data_dictionary.md`](data_dictionary.md).
-3. API kiểm tra cột, kiểu dữ liệu, dòng trống, miền giá trị và transaction ID trùng trước khi ghi database.
+2. Tải CSV UTF-8; trình xem trước dò cột phổ biến và hiển thị ánh xạ, lỗi, bản sao, trường thiếu và mẫu dữ liệu chuẩn hóa.
+3. Chọn nguồn doanh thu, cách hiểu ngày mơ hồ, mã tiền tệ và xác nhận riêng nếu muốn loại dòng lỗi hoặc bản sao hoàn toàn trước khi ghi database.
 4. Dataset được tạo mới, gắn với chủ tài khoản; dashboard chỉ truy vấn dataset đang chọn.
 5. Redis lưu response phân tích tối đa 5 phút theo user, dataset và bộ lọc; PostgreSQL vẫn là nguồn dữ liệu chuẩn.
 6. Người dùng có thể đổi tên hoặc xóa dataset cá nhân; dataset Coffee mẫu không thể bị sửa/xóa từ giao diện. Lựa chọn dataset gần nhất được ghi trong trình duyệt theo user.

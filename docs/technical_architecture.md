@@ -2,7 +2,7 @@
 
 ## 1. Phạm vi
 
-Phiên bản hiện tại phân tích dữ liệu bán hàng theo địa điểm, khoảng ngày, giờ, danh mục và sản phẩm. Đây là dashboard mô tả dữ liệu lịch sử, không phải hệ thống POS hay hệ thống kế toán.
+Phiên bản hiện tại phân tích dữ liệu bán hàng theo địa điểm/kênh bán, khoảng ngày, giờ (nếu nguồn có), danh mục và sản phẩm. Đây là dashboard mô tả dữ liệu lịch sử, không phải hệ thống POS hay hệ thống kế toán.
 
 Không suy ra lợi nhuận, biên lợi nhuận, giá vốn, tồn kho hiện tại, hàng thiếu/hàng dư, vốn lưu động hay tác động nhân quả từ CSV này. Các chức năng tồn kho chỉ được xem xét lại khi có dữ liệu nhập hàng, tồn kho theo thời điểm và giá vốn phù hợp.
 
@@ -10,11 +10,11 @@ Không suy ra lợi nhuận, biên lợi nhuận, giá vốn, tồn kho hiện t
 
 1. Khi khởi động với `DATABASE_URL`, backend tạo schema và nhập CSV Coffee mẫu vào PostgreSQL nếu dataset mẫu chưa tồn tại.
 2. Người dùng đăng ký/đăng nhập; API phát JWT có thời hạn 60 phút.
-3. Người dùng tải CSV UTF-8 theo schema chuẩn; backend kiểm tra rồi lưu dataset và giao dịch trong transaction PostgreSQL.
+3. Người dùng tải CSV UTF-8; backend xem trước ánh xạ cột, chuẩn hóa và chất lượng dữ liệu. Sau khi xác nhận lựa chọn xử lý, API lưu dataset và giao dịch trong transaction PostgreSQL.
 4. Mọi truy vấn xác thực chủ sở hữu; dataset mẫu là read-only dùng chung, dataset upload chỉ hiển thị với owner.
 5. FastAPI tính KPI theo bộ lọc; Redis cache JSON 5 phút theo user, dataset và bộ lọc.
 
-Workbook nguồn được làm sạch qua `backend/scripts/clean_sales_data.py` thành CSV chuẩn; đây là bước ETL ngoại tuyến trước khi upload. Hướng dẫn chi tiết ở [quy trình ETL](etl_process.md). Backend không đọc Google Sheets hoặc workbook trực tiếp. File người dùng upload không được ghi vào ổ đĩa ephemeral của Render; PostgreSQL là nguồn lưu trữ bền vững.
+Workbook Coffee mẫu có thể được làm sạch qua `backend/scripts/clean_sales_data.py`. CSV tải lên được chuẩn hóa trong bước ETL tại API, không yêu cầu tiêu đề cột khớp tuyệt đối mẫu Coffee. Hướng dẫn chi tiết ở [quy trình ETL](etl_process.md). Backend không đọc Google Sheets hoặc workbook trực tiếp. File upload không được lưu ở ổ đĩa ephemeral của Render; PostgreSQL là nguồn lưu trữ bền vững.
 
 ## 3. Thành phần
 
@@ -22,7 +22,7 @@ Workbook nguồn được làm sạch qua `backend/scripts/clean_sales_data.py` 
 |---|---|---|
 | React + Vite | Đăng nhập, chọn dataset, upload CSV, dashboard | Vercel, root `frontend` |
 | FastAPI | JWT auth, kiểm tra CSV, API analytics, CORS | Render, root `backend` |
-| PostgreSQL | Users, datasets, transactions; owner isolation | Render PostgreSQL |
+| PostgreSQL | Users, datasets, giao dịch, metadata chất lượng; owner isolation | Render PostgreSQL |
 | Redis | Cache analytics responses, TTL 300s | Render Redis |
 | CSV sạch | Nguồn seed dataset mẫu ban đầu | `backend/data/CLEAN - Transactions.csv` |
 
@@ -32,7 +32,7 @@ Redis không phải nguồn dữ liệu chính; khi cache miss hoặc Redis chư
 
 Gọi:
 
-- `R`: tổng `transaction_qty × unit_price` của các dòng trong phạm vi lọc.
+- `R`: tổng giá trị tiền của từng dòng theo nguồn doanh thu đã chọn; có thể là cột tiền nguồn hoặc `transaction_qty × unit_price`.
 - `N`: số `transaction_id` duy nhất có trong nguồn.
 - `Q`: tổng `transaction_qty`.
 
@@ -50,7 +50,7 @@ Các thuộc tính API `aov` và `upt` hiện được giữ vì tương thích 
 
 Khi có đủ ngày bắt đầu/kết thúc, dashboard có thể so sánh với khoảng liền trước cùng độ dài. Các nút nhanh 7/14/28 ngày và 1 tháng kết thúc tại ngày mới nhất của dataset; nếu dataset ngắn hơn preset, ngày đầu được giới hạn về ngày đầu tiên có dữ liệu. Mốc 1 tháng cùng ngày của tháng trước; nếu ngày đó không tồn tại thì dùng ngày cuối tháng trước.
 
-Doanh thu được tính từ `transaction_qty × unit_price`, không bao gồm điều chỉnh thuế/giảm giá/hoàn tiền do CSV không cung cấp. USD là đơn vị báo cáo theo quyết định của đồ án; chưa xác minh độc lập mã tiền tệ trong nguồn.
+Nguồn số tiền được lưu riêng theo từng dataset và không tự tính lại khi nguồn đã có cột tiền (ví dụ `total_spent`). Mã tiền tệ là mã ISO do người dùng xác nhận; nếu chưa biết, giao diện hiển thị rõ “chưa rõ tiền tệ”, không mặc định USD. Cờ trả hàng và khoản tiền âm giữ nguyên giá trị nguồn; dashboard không tự quy đổi thành doanh thu thuần hay tự khấu trừ. Khi dataset không có giờ giao dịch, API trả phân tích theo giờ rỗng và giao diện nêu rõ thiếu cột giờ.
 
 ### Kịch bản sales tax riêng
 
@@ -66,14 +66,15 @@ Các endpoint phân tích nhận bộ lọc tùy chọn `location`, `category`, 
 | `POST /api/auth/login` | Đăng nhập và nhận JWT |
 | `GET /api/auth/me` | Tài khoản hiện tại |
 | `GET /api/datasets` | Dataset mẫu và dataset thuộc tài khoản |
-| `POST /api/datasets/upload` | Validate CSV và lưu dataset riêng (25 MB, tối đa 250.000 dòng) |
+| `POST /api/datasets/preview` | Dò cột, chuẩn hóa thử và trả báo cáo chất lượng CSV; không ghi database |
+| `POST /api/datasets/upload` | Xác thực lựa chọn từ bước xem trước và lưu dataset riêng (25 MB, tối đa 250.000 dòng) |
 | `PATCH /api/datasets/{id}` | Đổi tên dataset cá nhân của chủ sở hữu |
 | `DELETE /api/datasets/{id}` | Xóa dataset cá nhân và các giao dịch thuộc dataset |
 | `GET /api/datasets/{id}/dashboard` | Dashboard theo dataset; cần access token trong header Authorization |
 | `GET /api/cache-status` | Trạng thái kết nối Redis |
 | `GET /healthz` | Liveness probe cho Render; không phụ thuộc dataset |
 | `GET /api/health` | Trạng thái API và dataset (`available`, `missing` hoặc `invalid`) |
-| `GET /api/metadata` | Số dòng, ngày đầu/cuối và mã tiền tệ báo cáo (`USD`) |
+| `GET /api/metadata` | Số dòng, ngày đầu/cuối, mã tiền tệ nếu đã xác nhận và báo cáo chất lượng |
 | `GET /api/locations` | Các địa điểm có trong CSV |
 | `GET /api/categories` | Các danh mục có trong CSV |
 | `GET /api/metrics/summary` | Doanh thu, mã giao dịch nguồn, số lượng, trung bình trên ID nguồn, ASP; field API `aov` / `upt` giữ vì tương thích |
@@ -91,7 +92,7 @@ Các endpoint `/api/metrics/*`, `/api/metadata`, `/api/locations` và `/api/cate
 |---|---|---|
 | `DATA_PATH` | `backend/data/CLEAN - Transactions.csv` | Đường dẫn CSV sạch; có thể ghi đè khi triển khai |
 | `CORS_ORIGINS` | localhost + Vercel production | Danh sách origin, phân cách bằng dấu phẩy |
-| `CURRENCY_CODE` | `USD` | Mã tiền tệ báo cáo theo quyết định của đồ án |
+| `CURRENCY_CODE` | `USD` | Mã tiền tệ cho các endpoint legacy/dataset mẫu; dataset upload lưu mã xác nhận riêng |
 | `VITE_API_BASE_URL` | `http://localhost:8000` | URL backend được nhúng lúc build frontend |
 | `DATABASE_URL` | Không mặc định | PostgreSQL URL; bắt buộc cho đăng ký, upload, dataset API |
 | `REDIS_URL` | Không mặc định | Redis URL; bật cache 5 phút khi được cấu hình |
@@ -103,7 +104,7 @@ Frontend giữ access token trong `sessionStorage`; token hết hạn sau 60 ph�
 
 - Các endpoint legacy đọc CSV giữ hành vi HTTP 503 nếu file mẫu thiếu; auth/dataset API yêu cầu `DATABASE_URL` và `JWT_SECRET`.
 - CSV mẫu được import theo batch khi khởi tạo database; file upload được kiểm tra và ghi thành dataset riêng trước khi dashboard phân tích.
-- Upload từ chối file trên 25 MB, hơn 250.000 dòng, thiếu cột, dữ liệu sai kiểu/miền, trường bắt buộc rỗng hoặc transaction ID trùng.
+- Upload từ chối file trên 25 MB, hơn 250.000 dòng, thiếu trường lõi hoặc không còn dòng hợp lệ. Dòng lỗi và bản sao hoàn toàn chỉ bị loại sau khi người dùng xác nhận ở bước xem trước; ID giao dịch trùng nhưng nội dung khác được giữ lại.
 - Các bộ lọc SQL dùng tham số bind; không nối dữ liệu người dùng vào SQL.
 - Redis cache có TTL 300 giây; cache key phân vùng theo user, dataset và bộ lọc, không cache thông tin xác thực.
 - Test bao gồm công thức cũ, hash mật khẩu, kiểm tra CSV, phân quyền sở hữu dataset, seed một lần, lọc analytics và tách cache theo user.

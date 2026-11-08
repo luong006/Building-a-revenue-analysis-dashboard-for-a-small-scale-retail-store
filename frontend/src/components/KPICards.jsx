@@ -7,13 +7,7 @@ import {
   ReceiptText,
   ShoppingCart,
 } from "lucide-react";
-
-const usd = (value) =>
-  new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: 2,
-  }).format(Number(value || 0));
+import { formatMoney } from "../services/formatMoney";
 
 function ComparisonMetric({ label, current, previous, formatValue }) {
   const difference = current - previous;
@@ -48,12 +42,15 @@ export default function KPICards({
   loading = false,
   comparison = null,
   showTaxScenario = false,
+  currencyCode = null,
 }) {
   const cards = [
     {
       label: "Doanh thu bán hàng",
-      value: loading ? "…" : data ? usd(data.total_revenue) : "—",
-      caption: "Giá trị bán hàng ghi nhận · USD",
+      value: loading ? "…" : data ? formatMoney(data.total_revenue, currencyCode) : "—",
+      caption: currencyCode
+        ? `Giá trị bán hàng ghi nhận · ${currencyCode}`
+        : "Giá trị bán hàng ghi nhận · chưa xác định tiền tệ",
       icon: CircleDollarSign,
       featured: true,
     },
@@ -79,7 +76,7 @@ export default function KPICards({
     },
     {
       label: "Doanh thu bình quân/ID nguồn",
-      value: loading ? "…" : data ? usd(data.aov) : "—",
+      value: loading ? "…" : data ? formatMoney(data.aov, currencyCode) : "—",
       caption: "Doanh thu ÷ số ID nguồn duy nhất; không khẳng định là giá trị trung bình mỗi đơn",
       icon: ShoppingCart,
     },
@@ -141,7 +138,7 @@ export default function KPICards({
           </span>
           <span>
             Doanh thu bình quân/sản phẩm{" "}
-            <strong className="text-slate-900">{usd(data.asp)}</strong>
+            <strong className="text-slate-900">{formatMoney(data.asp, currencyCode)}</strong>
           </span>
           <span>
             Số lượng/ID nguồn{" "}
@@ -211,7 +208,7 @@ export default function KPICards({
               </p>
             </div>
             <strong className="whitespace-nowrap text-lg font-bold text-amber-950">
-              {usd(data.total_revenue * 0.08875)}
+              {formatMoney(data.total_revenue * 0.08875, currencyCode)}
             </strong>
           </div>
         </section>
@@ -235,7 +232,7 @@ export default function KPICards({
               label="Doanh thu bán hàng"
               current={data.total_revenue}
               previous={comparison.previous.total_revenue}
-              formatValue={usd}
+              formatValue={(value) => formatMoney(value, currencyCode)}
             />
             <ComparisonMetric
               label="Mã giao dịch nguồn"

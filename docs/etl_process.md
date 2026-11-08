@@ -2,22 +2,22 @@
 
 ## Mục tiêu và trạng thái triển khai
 
-Quy trình chuyển workbook giao dịch nguồn thành CSV chuẩn để nạp vào Retail Pulse. Excel/Google Sheets đã được cân nhắc nhưng khó lặp lại và kiểm tra đồng nhất trên file lớn; giai đoạn này dùng Python để làm sạch có thể chạy lại và báo lỗi theo dòng.
+Quy trình chuyển dữ liệu giao dịch thành bản ghi có cấu trúc để phân tích. Workbook Coffee mẫu có thể được làm sạch ngoại tuyến bằng script Python; CSV tải lên được backend dò cột, chuẩn hóa và kiểm tra trong bước xem trước trước khi người dùng xác nhận.
 
-Script `backend/scripts/clean_sales_data.py` đọc workbook `.xlsx` và tạo CSV theo schema thống nhất. Nó không sửa file raw. API upload hiện nhận CSV chuẩn đã qua ETL, kiểm tra lại trước khi ghi PostgreSQL. Dataset Coffee trong `backend/data/CLEAN - Transactions.csv` là bản CSV sạch đang được dùng làm dataset mẫu.
+Script `backend/scripts/clean_sales_data.py` đọc workbook `.xlsx` Coffee và tạo CSV theo schema chuẩn. Nó không sửa file raw. API upload hỗ trợ các tiêu đề CSV phổ biến của bảng giao dịch đơn, không cần đổi tiêu đề thủ công theo mẫu Coffee. Người dùng được xem các cột đã ghép, lỗi, trùng lặp, giá trị thiếu và bản ghi mẫu trước khi xác nhận lưu PostgreSQL. Dataset Coffee trong `backend/data/CLEAN - Transactions.csv` là dữ liệu mẫu.
 
 ## Các bước ETL thực tế
 
 ### 1. Extract — trích xuất
 
-1. Tải workbook `.xlsx` được phép sử dụng từ nguồn Coffee Shop Sales.
+1. Tải dữ liệu `.xlsx` hoặc `.csv` được phép sử dụng từ nguồn.
 2. Giữ workbook raw nguyên trạng; không ghi đè hay chỉnh trực tiếp file nguồn.
-3. Chọn worksheet chứa giao dịch (mặc định script dùng sheet đang active; có thể chỉ định bằng `--sheet`).
-4. Đọc các cột giao dịch bằng `openpyxl` ở chế độ chỉ đọc; script yêu cầu đủ 11 cột chuẩn, không tự đoán các cột tương tự hoặc ghép schema khác.
+3. Với workbook Coffee, chọn worksheet chứa giao dịch (mặc định script dùng sheet đang active; có thể chỉ định bằng `--sheet`).
+4. Với CSV, người dùng tải tệp trực tiếp lên trình xem trước; hệ thống tìm dòng tiêu đề trong 10 dòng đầu và gợi ý ánh xạ các tên cột tương đương.
 
 ### 2. Transform — chuẩn hóa và kiểm tra
 
-Script:
+Script Coffee và bộ nhập CSV:
 
 - Chuẩn hóa tiêu đề cột về chữ thường và bỏ khoảng trắng ở hai đầu.
 - Chuẩn hóa ngày thành `YYYY-MM-DD`; chấp nhận ô ngày Excel hoặc định dạng văn bản ISO / `MM/DD/YYYY` / `MM/DD/YY`.
@@ -27,16 +27,21 @@ Script:
 - Bỏ khoảng trắng thừa ở văn bản; bắt buộc có địa điểm, danh mục và loại sản phẩm.
 - Bỏ qua dòng hoàn toàn trống; không âm thầm bỏ qua dòng có dữ liệu sai.
 - Từ chối ID giao dịch trùng, dữ liệu sai định dạng, cột thiếu hoặc vượt giới hạn chiều dài. Lỗi chỉ ra số dòng để người dùng sửa tại nguồn rồi chạy lại.
+- Bộ nhập CSV không tự xóa dòng lỗi hoặc bản sao: người dùng phải xác nhận riêng việc bỏ dòng không hợp lệ và xóa các dòng trùng hoàn toàn.
+- Dòng trùng mã giao dịch nhưng khác nội dung không được coi là bản sao và không tự xóa; ID được lưu dạng văn bản để giữ các mã như `TXN-106332`.
+- Cột tùy chọn không có trong nguồn được để trống. Cột lạ được giữ trong thuộc tính nguồn của dòng, nhưng không tự đưa vào chỉ số.
+- Ngày có thể đọc rõ được chuẩn hóa tự động. Ngày dạng `04/05/2024` không được đoán; người dùng chọn ngày/tháng hay tháng/ngày, hoặc xác nhận loại các dòng lỗi.
+- Người dùng chọn cột tiền nguồn (`total_spent`) hoặc phép tính số lượng × đơn giá khi nguồn hỗ trợ. Không tự thay số tiền nguồn bằng phép tính khác.
 
 Script không tự điền giá trị tài chính bị thiếu, không suy đoán thuế, giá vốn, lợi nhuận hoặc tồn kho, và không tự loại ngoại lệ. Những trường hợp cần quy tắc nghiệp vụ phải được kiểm tra và quyết định trước khi chạy lại.
 
 ### 3. Load — nạp
 
-1. Script ghi CSV UTF-8 theo 11 cột chuẩn, không thêm index hoặc cột dẫn xuất.
-2. Người dùng kiểm tra số dòng hợp lệ, lỗi nếu có, khoảng ngày và đối chiếu tổng số lượng / doanh thu với workbook nguồn.
-3. Nạp CSV qua chức năng upload của dashboard; backend xác thực schema, miền dữ liệu và ID trùng lần nữa, sau đó lưu các bản ghi và metadata trong PostgreSQL gắn với tài khoản.
-4. Dataset mẫu Coffee không bị ghi đè; mỗi lần upload tạo dataset riêng.
-5. Backend tính doanh thu dòng là `transaction_qty × unit_price`; thời gian và các chiều phân tích được lấy từ các cột nguồn. Redis chỉ cache kết quả phân tích, không phải nơi lưu dataset.
+1. Script Coffee ghi CSV UTF-8 theo 11 cột chuẩn, không thêm index hoặc cột dẫn xuất.
+2. Với CSV tải trực tiếp, trình xem trước báo dòng hợp lệ, lỗi, khoảng ngày, bản sao, cột thiếu/thừa và giá trị mẫu đã chuẩn hóa.
+3. Người dùng chọn quy tắc ngày, nguồn số tiền, mã tiền tệ (hoặc chưa xác định), và xác nhận riêng các dòng sẽ loại.
+4. Backend áp dụng đúng lựa chọn, rồi lưu bản ghi và metadata chất lượng trong PostgreSQL gắn với tài khoản.
+5. Dataset mẫu Coffee không bị ghi đè; mỗi lần upload tạo dataset riêng. Redis chỉ cache kết quả phân tích, không phải nơi lưu dataset.
 
 ## Cách chạy
 
@@ -57,7 +62,10 @@ Sau khi lệnh thành công, kiểm tra CSV và tải `coffee-clean.csv` lên da
 
 ## Định nghĩa và giới hạn phân tích
 
-- Doanh thu bán hàng theo dữ liệu nguồn = tổng `transaction_qty × unit_price`; không phải lợi nhuận.
+- Doanh thu bán hàng theo dữ liệu nguồn = tổng giá trị của cột số tiền đã chọn (hoặc số lượng × đơn giá nếu người dùng chọn cách tính); không phải lợi nhuận. Với Coffee mẫu, dùng số lượng × đơn giá; với Retail Store Sales, mặc định giữ `total_spent`.
+- Mã tiền tệ chỉ được hiển thị khi người dùng xác nhận. Nếu nguồn không nêu mã tiền tệ, số tiền vẫn được lưu và hiển thị nhưng gắn nhãn “chưa rõ tiền tệ”; không mặc định USD.
+- Cờ trả hàng và số tiền âm được giữ như dữ liệu nguồn; dashboard không tự quy đổi thành doanh thu thuần hay tự khấu trừ.
+- Bảng Retail Store Sales hiện không có giờ giao dịch, mã cửa hàng hoặc mã sản phẩm. Các phân tích cần các trường này không được tạo bằng dữ liệu giả; biểu đồ theo giờ sẽ nêu rõ không đủ dữ liệu thời gian.
 - `transaction_id` trong file hiện tại có 149.116 dòng và 149.116 ID duy nhất. Nó đang được dùng như mã nguồn duy nhất trên mỗi dòng; dữ liệu không cung cấp một khóa đơn hàng đáng tin cậy để tính số đơn chứa một SKU. Vì vậy dashboard không báo số giao dịch theo SKU.
 - “Số mã giao dịch nguồn” và các giá trị bình quân chia cho số ID nguồn chỉ được diễn giải theo định danh có trong file, không mặc định là số đơn hàng / AOV chuẩn.
 - Không tính lợi nhuận hoặc biên lợi nhuận nếu thiếu giá vốn theo SKU và các điều chỉnh cần thiết. Không tính tồn kho nếu thiếu tồn đầu kỳ, nhập hàng, điều chỉnh và tồn cuối kỳ theo thời điểm.

@@ -7,6 +7,7 @@ import {
   registerAccount,
   renameDataset,
   deleteDataset,
+  previewDataset,
   uploadDataset,
 } from "./services/api";
 import { getDatePresets } from "./services/dateRanges";
@@ -24,6 +25,28 @@ const EMPTY_FILTERS = {
   category: "All Categories",
   startDate: "",
   endDate: "",
+};
+
+const IMPORT_FIELD_LABELS = {
+  transaction_id: "Mã giao dịch",
+  transaction_date: "Ngày giao dịch",
+  transaction_time: "Giờ giao dịch",
+  transaction_qty: "Số lượng",
+  store_id: "Mã cửa hàng",
+  store_location: "Địa điểm / kênh bán",
+  product_id: "Mã sản phẩm",
+  unit_price: "Đơn giá",
+  total_spent: "Tổng tiền nguồn",
+  product_category: "Danh mục",
+  product_type: "Loại sản phẩm",
+  product_detail: "Tên sản phẩm",
+  discount: "Giảm giá",
+  returned: "Trạng thái trả hàng",
+  customer_id: "Mã khách hàng",
+  payment_method: "Phương thức thanh toán",
+  region: "Khu vực",
+  customer_segment: "Phân khúc khách hàng",
+  rating: "Đánh giá",
 };
 
 function AuthForm({ onAuthenticated }) {
@@ -142,6 +165,7 @@ function DashboardFilters({
   categories,
   onReset,
   metadata,
+  locationLabel = "Địa điểm",
 }) {
   const inputClass =
     "h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-800 outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100";
@@ -194,14 +218,14 @@ function DashboardFilters({
       </div>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <label className="flex flex-col gap-1.5 text-xs font-semibold text-slate-600">
-          Địa điểm
+          {locationLabel}
           <select
-            aria-label="Lọc theo địa điểm"
+            aria-label={`Lọc theo ${locationLabel.toLowerCase()}`}
             className={inputClass}
             value={filters.location}
             onChange={(event) => onChange("location", event.target.value)}
           >
-            <option value="All Locations">Tất cả địa điểm</option>
+            <option value="All Locations">Tất cả {locationLabel.toLowerCase()}</option>
             {locations.map((item) => <option key={item} value={item}>{item}</option>)}
           </select>
         </label>
@@ -280,6 +304,15 @@ export default function AuthenticatedApp() {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
   const [uploadSuccess, setUploadSuccess] = useState(null);
+  const [pendingUpload, setPendingUpload] = useState(null);
+  const [importPreview, setImportPreview] = useState(null);
+  const [importOptions, setImportOptions] = useState({
+    amountSource: "",
+    dateFormat: "auto",
+    currencyCode: "unknown",
+    deduplicateExact: false,
+    dropInvalidRows: false,
+  });
   const [datasetActionBusy, setDatasetActionBusy] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [datasetNameDraft, setDatasetNameDraft] = useState("");
@@ -373,6 +406,8 @@ export default function AuthenticatedApp() {
     setDatasetId("");
     setDashboard(null);
     setUploadSuccess(null);
+    setPendingUpload(null);
+    setImportPreview(null);
   }
 
   async function onUpload(event) {
@@ -381,8 +416,53 @@ export default function AuthenticatedApp() {
     setUploading(true);
     setError("");
     setUploadSuccess(null);
+    setPendingUpload(null);
+    setImportPreview(null);
     try {
-      const created = await uploadDataset(token, file);
+      const preview = await previewDataset(token, file);
+      setPendingUpload(file);
+      setImportPreview(preview);
+      setImportOptions({
+        amountSource: preview.amount_source || "",
+        dateFormat: "auto",
+        currencyCode: "unknown",
+        deduplicateExact: preview.exact_duplicate_rows > 0,
+        dropInvalidRows: false,
+      });
+    } catch (previewError) {
+      setError(previewError.message || "Không thể đọc trước dữ liệu CSV.");
+    } finally {
+      setUploading(false);
+      event.target.value = "";
+    }
+  }
+
+  async function refreshImportPreview() {
+    if (!pendingUpload) return;
+    setUploading(true);
+    setError("");
+    try {
+      const preview = await previewDataset(token, pendingUpload, {
+        amountSource: importOptions.amountSource,
+        dateFormat: importOptions.dateFormat,
+      });
+      setImportPreview(preview);
+    } catch (previewError) {
+      setError(previewError.message || "Không thể cập nhật bản xem trước.");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function confirmDatasetUpload() {
+    if (!pendingUpload || !importPreview) return;
+    setUploading(true);
+    setError("");
+    try {
+      const created = await uploadDataset(token, pendingUpload, {
+        ...importOptions,
+        amountSource: importPreview.amount_source,
+      });
       setDatasets((current) => [created, ...current]);
       setDatasetId(String(created.id));
       if (user) {
@@ -392,11 +472,12 @@ export default function AuthenticatedApp() {
       setDashboard(null);
       setUploadSuccess(created);
       setRenaming(false);
+      setPendingUpload(null);
+      setImportPreview(null);
     } catch (uploadError) {
       setError(uploadError.message || "Không tải được CSV.");
     } finally {
       setUploading(false);
-      event.target.value = "";
     }
   }
 
@@ -419,6 +500,26 @@ export default function AuthenticatedApp() {
 
   const selectedDataset = datasets.find((item) => String(item.id) === datasetId);
   const metadata = dashboard?.metadata || selectedDataset;
+  const currencyCode = metadata?.currency_code || null;
+  const locationLabel =
+    metadata?.source_format === "coffee_shop_sales"
+      ? "Địa điểm"
+      : "Địa điểm / kênh bán";
+  const missingTimeValues =
+    Number(metadata?.row_count || 0) > 0 &&
+    Number(
+      metadata?.quality_report?.missing_optional_values?.transaction_time || 0,
+    ) >= Number(metadata?.row_count || 0);
+  const invalidRowsToDrop = importPreview
+    ? importOptions.deduplicateExact
+      ? importPreview.invalid_rows_after_deduplication
+      : importPreview.invalid_rows
+    : 0;
+  const missingTransactionTime =
+    metadata?.quality_report?.missing_optional_columns?.includes(
+      "transaction_time",
+    ) || missingTimeValues;
+  const hasTransactionTime = !missingTransactionTime;
   const reportPeriod =
     filters.startDate || filters.endDate
       ? `${filters.startDate || metadata?.first_date || "Đầu kỳ"} – ${filters.endDate || metadata?.last_date || "Cuối kỳ"}`
@@ -507,7 +608,10 @@ export default function AuthenticatedApp() {
             <h2 className="mt-1 text-xl font-bold text-slate-900 sm:text-2xl">Doanh thu và hiệu suất sản phẩm</h2>
               <p className="mt-1 text-sm text-slate-500">
                 Dataset: <strong className="text-slate-700">{selectedDataset?.name || "Chưa chọn"}</strong>
-                {" · "}Kỳ: {reportPeriod} · USD
+                {" · "}Kỳ: {reportPeriod} · {currencyCode || "Chưa rõ tiền tệ"}
+                {metadata?.amount_source
+                  ? ` · Nguồn doanh thu: ${metadata.amount_source}`
+                  : ""}
               </p>
           </div>
           {metadata && (
@@ -524,7 +628,7 @@ export default function AuthenticatedApp() {
           <span className="font-semibold text-slate-800">Đang xem:</span>
           {filters.location !== "All Locations" && (
             <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1">
-              Địa điểm: {filters.location}
+              {locationLabel}: {filters.location}
             </span>
           )}
           {filters.category !== "All Categories" && (
@@ -581,7 +685,7 @@ export default function AuthenticatedApp() {
             />
           </label>
           <p className="basis-full text-xs leading-5 text-slate-500">
-            CSV tối đa 25 MB, cần theo mẫu cột chuẩn. File tải lên chỉ thuộc tài khoản của bạn; đơn giá được hiểu là USD.
+            CSV tối đa 25 MB. Hệ thống sẽ dò tên cột, chuẩn hóa định dạng và cho bạn kiểm tra trước khi lưu.
             {" "}
             <a className="font-semibold text-teal-800 underline" href="/csv-template.csv" download>
               Tải CSV mẫu
@@ -631,12 +735,284 @@ export default function AuthenticatedApp() {
           )}
         </section>
 
+        {importPreview && pendingUpload && (
+          <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h3 className="text-base font-bold text-slate-900">Kiểm tra dữ liệu trước khi tải</h3>
+                <p className="mt-1 text-sm text-slate-600">
+                  {pendingUpload.name} · {importPreview.total_rows.toLocaleString("vi-VN")} dòng dữ liệu
+                  {importPreview.first_date && importPreview.last_date
+                    ? ` · ${importPreview.first_date} – ${importPreview.last_date}`
+                    : ""}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setPendingUpload(null);
+                  setImportPreview(null);
+                  setError("");
+                }}
+                className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                Hủy tải lên
+              </button>
+            </div>
+
+            <div className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
+              <p className="rounded-lg bg-slate-50 p-3">
+                Hợp lệ trước khi loại trùng: <strong>{importPreview.valid_rows_before_deduplication.toLocaleString("vi-VN")}</strong>
+              </p>
+              <p className="rounded-lg bg-slate-50 p-3">
+                Dòng trùng hoàn toàn: <strong>{importPreview.exact_duplicate_rows.toLocaleString("vi-VN")}</strong>
+              </p>
+              <p className="rounded-lg bg-slate-50 p-3">
+                Dòng cần loại sau lựa chọn trùng: <strong>{invalidRowsToDrop.toLocaleString("vi-VN")}</strong>
+              </p>
+              <p className="rounded-lg bg-slate-50 p-3">
+                Dòng trống bỏ qua: <strong>{importPreview.blank_rows.toLocaleString("vi-VN")}</strong>
+              </p>
+            </div>
+            {(importPreview.returned_flagged_rows > 0 ||
+              importPreview.negative_amount_rows > 0) && (
+              <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                {importPreview.returned_flagged_rows > 0 &&
+                  `${importPreview.returned_flagged_rows.toLocaleString("vi-VN")} dòng được đánh dấu trả hàng`}
+                {importPreview.returned_flagged_rows > 0 &&
+                  importPreview.negative_amount_rows > 0 &&
+                  "; "}
+                {importPreview.negative_amount_rows > 0 &&
+                  `${importPreview.negative_amount_rows.toLocaleString("vi-VN")} dòng có số tiền âm`}
+                . Giá trị được giữ nguyên theo nguồn, không tự trừ/cộng điều chỉnh.
+              </p>
+            )}
+
+            <div className="grid gap-3 md:grid-cols-3">
+              <label className="text-xs font-semibold text-slate-700">
+                Cột số tiền dùng làm doanh thu
+                <select
+                  value={importOptions.amountSource}
+                  onChange={(event) =>
+                    setImportOptions((current) => ({
+                      ...current,
+                      amountSource: event.target.value,
+                    }))
+                  }
+                  className="mt-1.5 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-normal"
+                >
+                  {importPreview.available_amount_sources.map((source) => (
+                    <option key={source} value={source}>
+                      {source === "calculated" ? "Tính số lượng × đơn giá" : source}
+                    </option>
+                  ))}
+                </select>
+                <span className="mt-1 block font-normal text-slate-500">
+                  Giữ nguyên giá trị nguồn; không tự suy diễn lợi nhuận hoặc hoàn tiền.
+                </span>
+              </label>
+              <label className="text-xs font-semibold text-slate-700">
+                Cách hiểu ngày mơ hồ
+                <select
+                  value={importOptions.dateFormat}
+                  onChange={(event) =>
+                    setImportOptions((current) => ({
+                      ...current,
+                      dateFormat: event.target.value,
+                    }))
+                  }
+                  className="mt-1.5 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-normal"
+                >
+                  <option value="auto">Tự động, không đoán ngày mơ hồ</option>
+                  <option value="day_first">Ngày / tháng / năm</option>
+                  <option value="month_first">Tháng / ngày / năm</option>
+                </select>
+                <span className="mt-1 block font-normal text-slate-500">
+                  {importPreview.ambiguous_date_rows.toLocaleString("vi-VN")} dòng ngày đang mơ hồ.
+                </span>
+              </label>
+              <label className="text-xs font-semibold text-slate-700">
+                Mã tiền tệ
+                <input
+                  value={importOptions.currencyCode}
+                  onChange={(event) =>
+                    setImportOptions((current) => ({
+                      ...current,
+                      currencyCode:
+                        event.target.value.trim().toLowerCase() === "unknown"
+                          ? "unknown"
+                          : event.target.value.trim().toUpperCase(),
+                    }))
+                  }
+                  maxLength={7}
+                  placeholder="unknown"
+                  className="mt-1.5 h-10 w-full rounded-lg border border-slate-200 px-3 text-sm font-normal"
+                />
+                <span className="mt-1 block font-normal text-slate-500">
+                  Nhập mã ISO 4217 (ví dụ VND), hoặc để “unknown” nếu nguồn không nêu.
+                </span>
+              </label>
+            </div>
+
+            <div className="space-y-2 text-sm text-slate-700">
+              {(importPreview.amount_source !== importOptions.amountSource ||
+                importPreview.date_format !== importOptions.dateFormat) && (
+                <p className="rounded-lg bg-blue-50 p-3 text-blue-900">
+                  Lựa chọn vừa thay đổi; hãy cập nhật xem trước để kiểm tra lại số dòng hợp lệ và lỗi.
+                </p>
+              )}
+              {!/^(unknown|[A-Z]{3})$/.test(importOptions.currencyCode) && (
+                <p className="rounded-lg bg-rose-50 p-3 text-rose-800">
+                  Nhập “unknown” hoặc mã tiền tệ ISO gồm đúng 3 chữ in hoa.
+                </p>
+              )}
+              {importPreview.exact_duplicate_rows > 0 && (
+                <label className="flex items-start gap-2">
+                  <input
+                    type="checkbox"
+                    checked={importOptions.deduplicateExact}
+                    onChange={(event) =>
+                      setImportOptions((current) => ({
+                        ...current,
+                        deduplicateExact: event.target.checked,
+                      }))
+                    }
+                    className="mt-1"
+                  />
+                  <span>
+                    Loại {importPreview.exact_duplicate_rows.toLocaleString("vi-VN")} bản sao giống hệt nhau. Các giao dịch trùng mã nhưng khác nội dung không bị tự xóa.
+                  </span>
+                </label>
+              )}
+              {invalidRowsToDrop > 0 ? (
+                <label className="flex items-start gap-2">
+                  <input
+                    type="checkbox"
+                    checked={importOptions.dropInvalidRows}
+                    onChange={(event) =>
+                      setImportOptions((current) => ({
+                        ...current,
+                        dropInvalidRows: event.target.checked,
+                      }))
+                    }
+                    className="mt-1"
+                  />
+                  <span>
+                    Xác nhận loại {invalidRowsToDrop.toLocaleString("vi-VN")} dòng không thể chuẩn hóa. Không chọn thì hệ thống sẽ không lưu dataset.
+                  </span>
+                </label>
+              ) : (
+                <p className="text-emerald-800">Không phát hiện dòng dữ liệu lỗi.</p>
+              )}
+              {importPreview.missing_columns.length > 0 && (
+                <p className="rounded-lg bg-rose-50 p-3 text-rose-800">
+                  Thiếu cột bắt buộc: {importPreview.missing_columns.map((field) => IMPORT_FIELD_LABELS[field] || field).join(", ")}. Cần bổ sung hoặc sửa tiêu đề cột trước khi tải.
+                </p>
+              )}
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div>
+                <h4 className="text-sm font-bold text-slate-800">Ghép cột đã nhận diện</h4>
+                <ul className="mt-2 grid gap-1 text-xs text-slate-600 sm:grid-cols-2">
+                  {Object.entries(importPreview.mapping).map(([field, header]) => (
+                    <li key={field}>
+                      <strong>{IMPORT_FIELD_LABELS[field] || field}:</strong> {header}
+                    </li>
+                  ))}
+                </ul>
+                {importPreview.missing_optional_columns.length > 0 && (
+                  <p className="mt-2 text-xs text-slate-500">
+                    Không có cột tùy chọn: {importPreview.missing_optional_columns.map((field) => IMPORT_FIELD_LABELS[field] || field).join(", ")}. Hệ thống để trống, không tạo dữ liệu giả.
+                  </p>
+                )}
+                {importPreview.unmapped_columns.length > 0 && (
+                  <p className="mt-2 text-xs text-slate-500">
+                    Cột chưa dùng trong phân tích: {importPreview.unmapped_columns.join(", ")}. Giá trị nguồn vẫn được giữ trong hồ sơ dòng.
+                  </p>
+                )}
+              </div>
+              <div>
+                <h4 className="text-sm font-bold text-slate-800">Giá trị thiếu ở cột tùy chọn</h4>
+                {Object.keys(importPreview.missing_optional_values).length ? (
+                  <ul className="mt-2 grid gap-1 text-xs text-slate-600 sm:grid-cols-2">
+                    {Object.entries(importPreview.missing_optional_values).map(([field, count]) => (
+                      <li key={field}>
+                        {IMPORT_FIELD_LABELS[field] || field}: {count.toLocaleString("vi-VN")}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mt-2 text-xs text-slate-500">Không phát hiện giá trị thiếu ở cột tùy chọn.</p>
+                )}
+              </div>
+            </div>
+
+            {importPreview.normalized_preview.length > 0 && (
+              <details className="rounded-lg border border-slate-200 p-3">
+                <summary className="cursor-pointer text-sm font-semibold text-slate-800">
+                  Xem {importPreview.normalized_preview.length} dòng sau chuẩn hóa
+                </summary>
+                <pre className="mt-2 max-h-64 overflow-auto rounded bg-slate-50 p-3 text-xs leading-5 text-slate-700">
+                  {JSON.stringify(importPreview.normalized_preview, null, 2)}
+                </pre>
+              </details>
+            )}
+
+            {importPreview.error_examples.length > 0 && (
+              <details className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                <summary className="cursor-pointer text-sm font-semibold text-amber-900">
+                  Một số dòng cần xử lý ({importPreview.error_examples.length} ví dụ đầu)
+                </summary>
+                <ul className="mt-2 space-y-1 text-xs text-amber-900">
+                  {importPreview.error_examples.map((item) => (
+                    <li key={`${item.row}-${item.message}`}>Dòng {item.row}: {item.message}</li>
+                  ))}
+                </ul>
+              </details>
+            )}
+
+            <div className="flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-4">
+              <button
+                type="button"
+                disabled={uploading}
+                onClick={refreshImportPreview}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50"
+              >
+                Cập nhật xem trước
+              </button>
+              <button
+                type="button"
+                disabled={
+                  uploading ||
+                  !importPreview.ready ||
+                  importPreview.amount_source !== importOptions.amountSource ||
+                  importPreview.date_format !== importOptions.dateFormat ||
+                  (invalidRowsToDrop > 0 && !importOptions.dropInvalidRows) ||
+                  (importPreview.exact_duplicate_rows > 0 && !importOptions.deduplicateExact) ||
+                  !/^(unknown|[A-Z]{3})$/.test(importOptions.currencyCode)
+                }
+                onClick={confirmDatasetUpload}
+                className="rounded-lg bg-teal-800 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-900 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {uploading ? "Đang xử lý…" : "Xác nhận và tải dataset"}
+              </button>
+            </div>
+          </section>
+        )}
+
         {uploadSuccess && (
           <p className="rounded-lg border border-teal-200 bg-teal-50 px-4 py-3 text-sm text-teal-900" role="status">
             Đã tải “{uploadSuccess.name}” thành công: {uploadSuccess.row_count.toLocaleString("vi-VN")} dòng
             {uploadSuccess.first_date && uploadSuccess.last_date
               ? ` · ${uploadSuccess.first_date} – ${uploadSuccess.last_date}`
-              : ""}.
+              : ""}
+            {uploadSuccess.quality_report && (
+              <>
+                {" · "}đã loại {uploadSuccess.quality_report.exact_duplicates_removed.toLocaleString("vi-VN")} dòng trùng và {uploadSuccess.quality_report.invalid_rows_removed.toLocaleString("vi-VN")} dòng lỗi
+              </>
+            )}
+            .
           </p>
         )}
         {error && (
@@ -644,7 +1020,7 @@ export default function AuthenticatedApp() {
         )}
         {!datasets.length && (
           <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900" role="status">
-            Tài khoản hiện chưa có dataset. Tải một CSV chuẩn lên để bắt đầu.
+            Tài khoản hiện chưa có dataset. Tải một CSV lên để xem trước và bắt đầu.
           </p>
         )}
         <DashboardFilters
@@ -656,6 +1032,7 @@ export default function AuthenticatedApp() {
           locations={dashboard?.locations || []}
           categories={dashboard?.categories || []}
           metadata={metadata}
+          locationLabel={locationLabel}
           onReset={() => setFilters(EMPTY_FILTERS)}
         />
         {filterError && (
@@ -672,6 +1049,7 @@ export default function AuthenticatedApp() {
           dashboard={dashboard}
           granularity={granularity}
           loading={loading}
+          currencyCode={currencyCode}
         />
         <CollapsibleSection title="Chỉ số tổng quan">
           <KPICards
@@ -679,6 +1057,7 @@ export default function AuthenticatedApp() {
             loading={loading}
             comparison={dashboard?.comparison || null}
             showTaxScenario={selectedDataset?.is_sample === true}
+            currencyCode={currencyCode}
           />
         </CollapsibleSection>
         <CollapsibleSection title="Xu hướng doanh thu và phân tích theo thời gian">
@@ -687,11 +1066,14 @@ export default function AuthenticatedApp() {
             granularity={granularity}
             onGranularityChange={setGranularity}
             loading={loading}
+            currencyCode={currencyCode}
           />
           <TimeAnalysisCharts
             data={dashboard?.hourly || []}
             dailyTrend={dashboard?.daily_trend || []}
             loading={loading}
+            currencyCode={currencyCode}
+            hasTransactionTime={hasTransactionTime}
           />
         </CollapsibleSection>
         <CollapsibleSection title="Cơ cấu doanh thu">
@@ -719,6 +1101,11 @@ export default function AuthenticatedApp() {
                   current.location === location ? "All Locations" : location,
               }))
             }
+            currencyCode={currencyCode}
+            locationLabel={locationLabel.toLowerCase()}
+            hasNegativeAmounts={
+              Number(metadata?.quality_report?.negative_amount_rows || 0) > 0
+            }
           />
         </CollapsibleSection>
         <CollapsibleSection title="Xếp hạng sản phẩm">
@@ -730,7 +1117,7 @@ export default function AuthenticatedApp() {
         </CollapsibleSection>
         <aside className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs leading-5 text-slate-600">
           <span className="font-semibold text-slate-800">Lưu ý:</span>{" "}
-          Doanh thu là giá trị bán hàng (số lượng × đơn giá), không phải lợi nhuận.
+          Doanh thu là giá trị nguồn đã chọn để ghi nhận, không phải lợi nhuận.
           Kịch bản thuế NYC 8,875% chỉ áp dụng cho dataset Coffee mẫu, không phải số thuế thực thu/nộp.
         </aside>
       </main>
