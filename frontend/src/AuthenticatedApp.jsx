@@ -99,7 +99,7 @@ function AuthForm({ onAuthenticated }) {
               maxLength={320}
               value={email}
               onChange={(event) => setEmail(event.target.value)}
-              className="mt-1.5 h-11 w-full rounded-lg border border-slate-300 px-3 outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
+              className="mt-1.5 h-11 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 text-white [color-scheme:dark] outline-none placeholder:text-slate-400 focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
             />
           </label>
           <label className="block text-sm font-medium text-slate-700">
@@ -112,7 +112,7 @@ function AuthForm({ onAuthenticated }) {
               maxLength={256}
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              className="mt-1.5 h-11 w-full rounded-lg border border-slate-300 px-3 outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
+              className="mt-1.5 h-11 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 text-white [color-scheme:dark] outline-none placeholder:text-slate-400 focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
             />
             {mode === "register" && (
               <span className="mt-1 block text-xs font-normal text-slate-500">
@@ -846,7 +846,7 @@ export default function AuthenticatedApp() {
                   }
                   maxLength={7}
                   placeholder="unknown"
-                  className="mt-1.5 h-10 w-full rounded-lg border border-slate-200 px-3 text-sm font-normal"
+                  className="mt-1.5 h-10 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 text-sm font-normal text-white [color-scheme:dark] outline-none placeholder:text-slate-400 focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
                 />
                 <span className="mt-1 block font-normal text-slate-500">
                   Nhập mã ISO 4217 (ví dụ VND), hoặc để “unknown” nếu nguồn không nêu.

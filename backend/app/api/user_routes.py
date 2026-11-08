@@ -364,11 +364,12 @@ def dashboard_data(session, dataset, filters):
     )
     summary = summary_for(session, base)
 
+    location_value = func.coalesce(SaleRecord.store_location, UNKNOWN_LOCATION)
     locations = session.scalars(
-        select(func.coalesce(SaleRecord.store_location, UNKNOWN_LOCATION))
+        select(location_value)
         .distinct()
         .where(SaleRecord.dataset_id == dataset.id)
-        .order_by(SaleRecord.store_location)
+        .order_by(location_value)
     ).all()
     categories = session.scalars(
         select(SaleRecord.product_category)
