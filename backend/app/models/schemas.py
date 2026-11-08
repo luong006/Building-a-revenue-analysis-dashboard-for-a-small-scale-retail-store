@@ -41,7 +41,6 @@ class ProductSalesItem(BaseModel):
     product: str
     category: str
     quantity_sold: int
-    transaction_count: int
     total_revenue: float
     revenue_share_pct: float
 

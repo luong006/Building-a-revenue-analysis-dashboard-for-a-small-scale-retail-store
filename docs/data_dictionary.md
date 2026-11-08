@@ -20,18 +20,20 @@ Nguồn là dataset Coffee Shop Sales của Maven Roasters, cửa hàng giả l�
 
 Giữ bộ tiêu đề chuẩn này khi xuất CSV; không cần thêm cột `sales`, `hour`, `month`, `weekday` hay cột index. Backend tính doanh thu dòng là `transaction_qty × unit_price` và lấy giờ từ `transaction_time`, tránh phải đồng bộ các cột dẫn xuất thủ công. Giai đoạn hiện tại mặc định coi `unit_price` là USD; nếu nguồn CSV dùng tiền tệ khác, cần chuyển đổi thống nhất trước khi upload. Kịch bản thuế NYC chỉ hiển thị với dataset Coffee mẫu, không áp dụng tự động cho CSV khác.
 
-## Các bước làm sạch trên Google Sheets
+## Quy trình ETL bằng Python
 
 1. Tải workbook gốc từ repository nguồn và lưu riêng một bản raw không chỉnh sửa.
-2. Tạo một bản Google Sheets làm việc; giữ 11 cột cần thiết theo đúng tiêu đề chuẩn ở trên.
-3. Chuẩn hóa ngày thành `YYYY-MM-DD`, thời gian thành `HH:MM:SS`, quantity/ID thành số; chuẩn hóa khoảng trắng và cách viết của địa điểm, danh mục, tên sản phẩm.
-4. Kiểm tra giá trị trống, transaction ID trùng, ID không phải số, quantity bằng 0/âm, unit price âm, ngày/giờ không hợp lệ.
-5. Đối chiếu số dòng và tổng quantity; kiểm tra hợp lý doanh thu tính từ `quantity × unit_price` trước/sau chuẩn hóa.
+2. Tạo môi trường Python theo `backend/requirements.txt`, sau đó chạy `backend/scripts/clean_sales_data.py` trên workbook `.xlsx`.
+3. Script yêu cầu đủ 11 cột; chuẩn hóa ngày/giờ, ID, số lượng, đơn giá và khoảng trắng; bỏ qua dòng trống hoàn toàn.
+4. Dòng dữ liệu không hợp lệ, ID trùng, cột thiếu hoặc giá trị vượt quy tắc sẽ dừng ETL với thông báo số dòng. Không ghi đè CSV đầu ra trước đó nếu lần chạy mới thất bại.
+5. Đối chiếu số dòng, tổng quantity và doanh thu tính từ `quantity × unit_price` với workbook nguồn.
 6. Ghi rõ phép tính doanh thu dùng đơn giá và quantity của nguồn. Nếu workbook có giảm giá, hoàn tiền, thuế hoặc định nghĩa sales khác, dừng và thống nhất cách xử lý trước khi xuất dữ liệu.
-7. Tải xuống CSV UTF-8, không giữ số dòng tiêu đề kép, không thêm index.
+7. Script ghi CSV UTF-8 theo schema chuẩn, không thêm index hoặc cột dẫn xuất.
 8. Dùng upload trong dashboard; API giới hạn file 25 MB/250.000 dòng, kiểm tra schema, kiểu dữ liệu, miền giá trị và transaction ID trùng trước khi lưu.
 9. Chạy backend tests và đối chiếu tổng quan sau khi upload.
 
+Chi tiết từng bước, cách chạy và hồ sơ cần lưu cho mỗi lần xử lý được ghi tại [`etl_process.md`](etl_process.md).
+
 ## Giới hạn nguồn và diễn giải
 
-Nguồn mô tả transaction ID, ngày/giờ, lượng bán, cửa hàng, sản phẩm và đơn giá; không có COGS, lợi nhuận, tồn kho hiện tại hay lịch nhập hàng. Cần xác minh mã tiền tệ từ tài liệu nguồn/workbook trước khi gắn nhãn USD hoặc quy đổi VND. Tổng `quantity × unit_price` được gọi là doanh thu bán hàng theo dữ liệu nguồn, không gọi là lợi nhuận hoặc doanh thu thuần nếu chưa xác minh giảm giá/hoàn tiền/thuế.
+Nguồn mô tả transaction ID, ngày/giờ, lượng bán, cửa hàng, sản phẩm và đơn giá; không có COGS, lợi nhuận, tồn kho hiện tại hay lịch nhập hàng. Trong workbook hiện tại mỗi transaction ID chỉ xuất hiện một lần, vì vậy không thể khẳng định đây là khóa của giỏ hàng/đơn hàng nhiều sản phẩm. Dashboard gọi chúng là “mã giao dịch nguồn” và không xếp hạng SKU theo số đơn hàng có chứa sản phẩm. Cần xác minh mã tiền tệ từ tài liệu nguồn/workbook trước khi gắn nhãn USD hoặc quy đổi VND. Tổng `quantity × unit_price` được gọi là doanh thu bán hàng theo dữ liệu nguồn, không gọi là lợi nhuận hoặc doanh thu thuần nếu chưa xác minh giảm giá/hoàn tiền/thuế.

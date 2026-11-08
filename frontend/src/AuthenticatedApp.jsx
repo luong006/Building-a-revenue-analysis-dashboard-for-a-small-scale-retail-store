@@ -9,7 +9,9 @@ import {
   deleteDataset,
   uploadDataset,
 } from "./services/api";
+import { getDatePresets } from "./services/dateRanges";
 import KPICards from "./components/KPICards";
+import DashboardInsights from "./components/DashboardInsights";
 import {
   BreakdownCharts,
   RevenueTrendChart,
@@ -132,9 +134,18 @@ function AuthForm({ onAuthenticated }) {
   );
 }
 
-function DashboardFilters({ filters, onChange, locations, categories, onReset, metadata }) {
+function DashboardFilters({
+  filters,
+  onChange,
+  onDateRangeChange,
+  locations,
+  categories,
+  onReset,
+  metadata,
+}) {
   const inputClass =
     "h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-800 outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100";
+  const datePresets = getDatePresets(metadata?.first_date, metadata?.last_date);
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
@@ -151,6 +162,35 @@ function DashboardFilters({ filters, onChange, locations, categories, onReset, m
         >
           Xóa bộ lọc
         </button>
+      </div>
+      <div className="mb-4">
+        <p className="mb-2 text-xs font-semibold text-slate-600">
+          Khoảng nhanh · tính lùi từ ngày dữ liệu mới nhất
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {datePresets.map((preset) => {
+            const selected =
+              filters.startDate === preset.startDate &&
+              filters.endDate === preset.endDate;
+            return (
+              <button
+                key={preset.id}
+                type="button"
+                aria-pressed={selected}
+                onClick={() =>
+                  onDateRangeChange(preset.startDate, preset.endDate)
+                }
+                className={`rounded-lg border px-3 py-2 text-xs font-semibold transition focus:outline-none focus:ring-2 focus:ring-teal-600 focus:ring-offset-1 ${
+                  selected
+                    ? "border-teal-800 bg-teal-800 text-white"
+                    : "border-slate-200 bg-white text-slate-700 hover:border-teal-500 hover:text-teal-800"
+                }`}
+              >
+                {preset.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <label className="flex flex-col gap-1.5 text-xs font-semibold text-slate-600">
@@ -477,6 +517,40 @@ export default function AuthenticatedApp() {
             </p>
           )}
         </div>
+        <div
+          className="flex flex-wrap items-center gap-2 text-xs text-slate-600"
+          aria-label="Phạm vi báo cáo đang áp dụng"
+        >
+          <span className="font-semibold text-slate-800">Đang xem:</span>
+          {filters.location !== "All Locations" && (
+            <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1">
+              Địa điểm: {filters.location}
+            </span>
+          )}
+          {filters.category !== "All Categories" && (
+            <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1">
+              Danh mục: {filters.category}
+            </span>
+          )}
+          {filters.startDate && (
+            <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1">
+              Từ ngày: {filters.startDate}
+            </span>
+          )}
+          {filters.endDate && (
+            <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1">
+              Đến ngày: {filters.endDate}
+            </span>
+          )}
+          {filters.location === "All Locations" &&
+            filters.category === "All Categories" &&
+            !filters.startDate &&
+            !filters.endDate && (
+              <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1">
+                Toàn bộ dữ liệu
+              </span>
+            )}
+        </div>
 
         <section className="flex flex-wrap items-end gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <label className="min-w-[220px] flex-1 text-xs font-semibold text-slate-600">
@@ -576,6 +650,9 @@ export default function AuthenticatedApp() {
         <DashboardFilters
           filters={filters}
           onChange={(key, value) => setFilters((current) => ({ ...current, [key]: value }))}
+          onDateRangeChange={(startDate, endDate) =>
+            setFilters((current) => ({ ...current, startDate, endDate }))
+          }
           locations={dashboard?.locations || []}
           categories={dashboard?.categories || []}
           metadata={metadata}
@@ -591,6 +668,11 @@ export default function AuthenticatedApp() {
             Đang cập nhật KPI và biểu đồ theo dataset/bộ lọc đã chọn…
           </p>
         )}
+        <DashboardInsights
+          dashboard={dashboard}
+          granularity={granularity}
+          loading={loading}
+        />
         <CollapsibleSection title="Chỉ số tổng quan">
           <KPICards
             data={dashboard?.summary}
@@ -617,6 +699,26 @@ export default function AuthenticatedApp() {
             categoryData={dashboard?.category_mix || []}
             locationData={dashboard?.location_mix || []}
             loading={loading}
+            selectedCategory={
+              filters.category === "All Categories" ? "" : filters.category
+            }
+            selectedLocation={
+              filters.location === "All Locations" ? "" : filters.location
+            }
+            onCategorySelect={(category) =>
+              setFilters((current) => ({
+                ...current,
+                category:
+                  current.category === category ? "All Categories" : category,
+              }))
+            }
+            onLocationSelect={(location) =>
+              setFilters((current) => ({
+                ...current,
+                location:
+                  current.location === location ? "All Locations" : location,
+              }))
+            }
           />
         </CollapsibleSection>
         <CollapsibleSection title="Xếp hạng sản phẩm">

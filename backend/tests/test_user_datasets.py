@@ -296,6 +296,7 @@ class UserDatasetTests(unittest.TestCase):
         self.assertEqual(result["summary"]["total_revenue"], 5.0)
         self.assertEqual(result["summary"]["total_transactions"], 1)
         self.assertEqual(result["trend"][0]["period"], "2023-01-02")
+        self.assertNotIn("transaction_count", result["revenue_ranked"][0])
         self.assertEqual(
             {item["name"] for item in result["category_mix"]}, {"Coffee", "Tea"}
         )

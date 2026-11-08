@@ -134,7 +134,6 @@ def calculate_top_products(
             product,
             category,
             SUM(quantity) AS quantity_sold,
-            COUNT(DISTINCT transaction_id) AS transaction_count,
             ROUND(SUM(line_total), 2) AS product_revenue
         FROM sales_view
         {where_clause}
@@ -149,9 +148,8 @@ def calculate_top_products(
             "product": str(row[0]),
             "category": str(row[1]),
             "quantity_sold": int(row[2]),
-            "transaction_count": int(row[3]),
-            "total_revenue": float(row[4]),
-            "revenue_share_pct": round(float(row[4]) / total_revenue * 100, 2)
+            "total_revenue": float(row[3]),
+            "revenue_share_pct": round(float(row[3]) / total_revenue * 100, 2)
             if total_revenue
             else 0.0,
         }

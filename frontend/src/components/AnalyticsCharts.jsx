@@ -74,7 +74,7 @@ function SalesTooltip({ active, payload, label }) {
       <p className="text-teal-800">Doanh thu: {usd(row.revenue)}</p>
       {row.transactions !== undefined && (
         <p className="mt-1 text-slate-600">
-          Mã giao dịch: {number(row.transactions)}
+        Mã giao dịch nguồn duy nhất: {number(row.transactions)}
         </p>
       )}
       {row.items_sold !== undefined && (
@@ -199,7 +199,15 @@ export function RevenueTrendChart({
   );
 }
 
-function MixChart({ title, subtitle, icon: Icon, data, loading }) {
+function MixChart({
+  title,
+  subtitle,
+  icon: Icon,
+  data,
+  loading,
+  selectedName,
+  onSelect,
+}) {
   const chartData = data.filter((item) => item.revenue > 0);
   const totalRevenue = chartData.reduce((sum, item) => sum + item.revenue, 0);
   const totalQuantity = chartData.reduce((sum, item) => sum + item.quantity, 0);
@@ -223,9 +231,17 @@ function MixChart({ title, subtitle, icon: Icon, data, loading }) {
                   paddingAngle={2}
                   stroke="#fff"
                   strokeWidth={2}
+                  onClick={(item) => onSelect?.(item?.name || item?.payload?.name)}
+                  style={onSelect ? { cursor: "pointer" } : undefined}
                 >
                   {chartData.map((item, index) => (
-                    <Cell key={item.name} fill={COLORS[index % COLORS.length]} />
+                    <Cell
+                      key={item.name}
+                      fill={COLORS[index % COLORS.length]}
+                      opacity={
+                        selectedName && selectedName !== item.name ? 0.42 : 1
+                      }
+                    />
                   ))}
                 </Pie>
                 <Tooltip formatter={(value) => [usd(value), "Doanh thu"]} />
@@ -234,7 +250,15 @@ function MixChart({ title, subtitle, icon: Icon, data, loading }) {
           </div>
           <ul className="space-y-2.5 text-xs" aria-label={`${title} legend`}>
             {chartData.map((item, index) => (
-              <li key={item.name} className="flex min-w-0 items-center justify-between gap-2">
+              <li key={item.name} className="min-w-0">
+                <button
+                  type="button"
+                  aria-pressed={selectedName === item.name}
+                  onClick={() => onSelect?.(item.name)}
+                  className={`flex w-full min-w-0 items-center justify-between gap-2 rounded-md p-1 text-left transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-teal-600 ${
+                    selectedName === item.name ? "bg-teal-50" : ""
+                  }`}
+                >
                 <span className="flex min-w-0 items-center gap-2">
                   <span
                     aria-hidden="true"
@@ -256,9 +280,10 @@ function MixChart({ title, subtitle, icon: Icon, data, loading }) {
                     {totalQuantity
                       ? ((item.quantity / totalQuantity) * 100).toFixed(1)
                       : "0.0"}
-                    % · {number(item.transactions)} mã
+                    % · {number(item.transactions)} ID nguồn
                   </span>
                 </span>
+                </button>
               </li>
             ))}
           </ul>
@@ -268,7 +293,15 @@ function MixChart({ title, subtitle, icon: Icon, data, loading }) {
   );
 }
 
-export function BreakdownCharts({ categoryData = [], locationData = [], loading }) {
+export function BreakdownCharts({
+  categoryData = [],
+  locationData = [],
+  loading,
+  selectedCategory,
+  selectedLocation,
+  onCategorySelect,
+  onLocationSelect,
+}) {
   return (
     <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
       <MixChart
@@ -277,6 +310,8 @@ export function BreakdownCharts({ categoryData = [], locationData = [], loading 
         icon={Tags}
         data={categoryData}
         loading={loading}
+        selectedName={selectedCategory}
+        onSelect={onCategorySelect}
       />
       <MixChart
         title="Cơ cấu doanh thu theo địa điểm"
@@ -284,6 +319,8 @@ export function BreakdownCharts({ categoryData = [], locationData = [], loading 
         icon={MapPin}
         data={locationData}
         loading={loading}
+        selectedName={selectedLocation}
+        onSelect={onLocationSelect}
       />
     </div>
   );
@@ -426,7 +463,6 @@ function RankingTable({ title, subtitle, products, mode }) {
               <tr className="border-y border-slate-100 bg-slate-50 text-[10px] font-bold uppercase tracking-wide text-slate-500">
                 <th scope="col" className="px-2 py-2.5">#</th>
                 <th scope="col" className="px-2 py-2.5">Sản phẩm</th>
-                <th scope="col" className="px-2 py-2.5 text-right">Mã giao dịch</th>
                 <th scope="col" className="px-2 py-2.5 text-right">Số lượng</th>
                 <th scope="col" className="px-2 py-2.5 text-right">Doanh thu</th>
                 {!quantityMode && (
@@ -445,9 +481,6 @@ function RankingTable({ title, subtitle, products, mode }) {
                     <p className="mt-0.5 truncate text-[11px] text-slate-500">
                       {product.category}
                     </p>
-                  </td>
-                  <td className="whitespace-nowrap px-2 py-3 text-right text-slate-600">
-                    {number(product.transaction_count)}
                   </td>
                   <td className="whitespace-nowrap px-2 py-3 text-right font-semibold text-slate-900">
                     {number(product.quantity_sold)}

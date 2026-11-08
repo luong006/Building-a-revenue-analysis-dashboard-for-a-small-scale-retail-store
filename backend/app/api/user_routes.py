@@ -472,7 +472,6 @@ def dashboard_data(session, dataset, filters):
             SaleRecord.product_type,
             SaleRecord.product_category,
             func.sum(SaleRecord.transaction_qty).label("quantity"),
-            func.count(distinct(SaleRecord.transaction_id)),
             func.sum(total).label("revenue"),
         )
         .where(*base)
@@ -489,10 +488,9 @@ def dashboard_data(session, dataset, filters):
                 "product": row[0].strip() or row[1],
                 "category": row[2],
                 "quantity_sold": int(row[3]),
-                "transaction_count": int(row[4]),
-                "total_revenue": round(float(row[5]), 2),
+                "total_revenue": round(float(row[4]), 2),
                 "revenue_share_pct": round(
-                    float(row[5]) / summary["total_revenue"] * 100, 2
+                    float(row[4]) / summary["total_revenue"] * 100, 2
                 )
                 if summary["total_revenue"]
                 else 0,

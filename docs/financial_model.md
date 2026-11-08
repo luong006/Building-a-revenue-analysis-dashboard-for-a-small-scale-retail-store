@@ -4,24 +4,24 @@
 
 Tài liệu *Fundamentals of Corporate Finance* của Stephen A. Ross, Randolph Westerfield và Bradford D. Jordan được dùng làm tài liệu tham khảo cho thuật ngữ tài chính doanh nghiệp khi phù hợp. Không gán công thức bán lẻ hoặc thuật toán phân tích dữ liệu cho Ross et al. nếu chưa xác minh trực tiếp nguồn, ấn bản và trang.
 
-Dashboard mô tả doanh thu bán hàng và số lượng giao dịch. Dataset không có giá vốn hàng bán (COGS), chi phí hoạt động, thuế thực tế theo giao dịch, tài sản/nợ ngắn hạn hoặc dữ liệu tồn kho theo thời điểm; vì vậy không tính lợi nhuận, biên lợi nhuận, vốn lưu động ròng (NWC), vòng quay hàng tồn kho, chu kỳ hoạt động hay chi phí thiếu hàng/tồn trữ.
+Dashboard mô tả doanh thu bán hàng và số lượng được ghi nhận trong nguồn. Dataset không có khóa đơn hàng/giỏ hàng đã được xác minh, giá vốn hàng bán (COGS), chi phí hoạt động, thuế thực tế theo giao dịch, tài sản/nợ ngắn hạn hoặc dữ liệu tồn kho theo thời điểm; vì vậy không tính AOV theo đơn, lợi nhuận, biên lợi nhuận, vốn lưu động ròng (NWC), vòng quay hàng tồn kho, chu kỳ hoạt động hay chi phí thiếu hàng/tồn trữ.
 
 ## 2. Chỉ số bán hàng dùng trong dashboard
 
 Các chỉ số sau được định nghĩa từ trường dữ liệu và phép tổng hợp của dự án; đây là các thước đo vận hành bán lẻ, không khẳng định là mô hình do giáo trình Ross xây dựng.
 
 - **Doanh thu bán hàng (`R`)**: tổng `transaction_qty × unit_price` của các dòng đã lọc. Không gọi là lợi nhuận. Nếu nguồn không nêu rõ cách xử lý giảm giá/hoàn trả/thuế, không tự gọi là doanh thu thuần.
-- **Giao dịch (`N`)**: số mã giao dịch duy nhất (`transaction_id`). Không đồng nhất một giao dịch với một khách hàng hoặc một lượt ghé.
+- **Mã giao dịch nguồn (`N`)**: số `transaction_id` duy nhất. Trong workbook hiện tại mỗi ID chỉ xuất hiện một lần, nên chưa có bằng chứng đây là khóa của giỏ hàng/đơn hàng; không đồng nhất ID này với đơn hàng, khách hàng hoặc lượt ghé.
 - **Số lượng bán (`Q`)**: tổng `transaction_qty`.
-- **AOV**: `R / N`.
-- **UPT**: `Q / N`.
+- **Doanh thu bình quân/ID nguồn**: `R / N`; đây là tỷ lệ trên ID nguồn, không phải AOV chuẩn.
+- **Số lượng bình quân/ID nguồn**: `Q / N`; đây là tỷ lệ trên ID nguồn, không phải UPT chuẩn của đơn.
 - **ASP**: `R / Q`.
-- **Đồng nhất thức**: `R = N × UPT × ASP`, sai khác nhỏ có thể xuất hiện do làm tròn khi hiển thị.
-- **Cơ cấu nhóm/sản phẩm**: doanh thu, tỷ trọng doanh thu, số lượng, tỷ trọng số lượng và số mã giao dịch duy nhất được tổng hợp theo danh mục, địa điểm hoặc sản phẩm.
+- **Đồng nhất thức**: `R = N × (Q / N) × (R / Q)` khi mẫu số khác 0, sai khác nhỏ có thể xuất hiện do làm tròn khi hiển thị.
+- **Cơ cấu nhóm/sản phẩm**: doanh thu, tỷ trọng doanh thu, số lượng và tỷ trọng số lượng theo danh mục, địa điểm hoặc sản phẩm. Không xếp hạng sản phẩm theo số đơn hàng có chứa sản phẩm vì không có khóa đơn hàng đáng tin cậy.
 - **Xu hướng**: doanh thu, số lượng và mã giao dịch theo ngày/tháng; doanh thu theo giờ; doanh thu bình quân trên ngày có giao dịch theo thứ.
 - **So sánh kỳ**: chênh lệch tuyệt đối và phần trăm giữa khoảng ngày chọn với khoảng liền trước có cùng số ngày, chỉ khi dữ liệu lịch sử bao phủ đủ cả hai kỳ. Đây là mô tả thay đổi, không khẳng định nguyên nhân hay lợi nhuận.
 
-Khi mẫu lọc không có giao dịch hoặc quantity bằng 0, tỷ số tương ứng trả về 0 để giữ hợp đồng API ổn định; báo cáo học thuật vẫn cần nêu số quan sát của mẫu.
+Khi mẫu lọc không có ID nguồn hoặc quantity bằng 0, tỷ số tương ứng trả về 0 để giữ hợp đồng API ổn định; báo cáo học thuật vẫn cần nêu số quan sát của mẫu. API giữ tên field `aov` và `upt` để tương thích, nhưng giao diện và tài liệu không diễn giải chúng là giá trị trung bình theo đơn hàng.
 
 ## 3. Kịch bản ước tính sales tax (không phải số thực thu)
 

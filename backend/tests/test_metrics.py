@@ -138,7 +138,6 @@ class MetricsTests(unittest.TestCase):
         self.assertEqual(len(products), 1)
         self.assertEqual(products[0]["product"], "Espresso")
         self.assertEqual(products[0]["quantity_sold"], 2)
-        self.assertEqual(products[0]["transaction_count"], 1)
         self.assertEqual(products[0]["revenue_share_pct"], 75.0)
 
     def test_top_products_can_be_ranked_by_quantity(self):

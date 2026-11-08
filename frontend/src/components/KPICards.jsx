@@ -58,13 +58,13 @@ export default function KPICards({
       featured: true,
     },
     {
-      label: "Mã giao dịch",
+      label: "Mã giao dịch nguồn",
       value: loading
         ? "…"
         : data
           ? Number(data.total_transactions).toLocaleString("en-US")
           : "—",
-      caption: "Số mã giao dịch duy nhất",
+      caption: "Số ID duy nhất trong dữ liệu",
       icon: ReceiptText,
     },
     {
@@ -78,9 +78,9 @@ export default function KPICards({
       icon: PackageCheck,
     },
     {
-      label: "Doanh thu bình quân/mã giao dịch",
+      label: "Doanh thu bình quân/ID nguồn",
       value: loading ? "…" : data ? usd(data.aov) : "—",
-      caption: "Doanh thu bán hàng ÷ số mã giao dịch",
+      caption: "Doanh thu ÷ số ID nguồn duy nhất; không khẳng định là giá trị trung bình mỗi đơn",
       icon: ShoppingCart,
     },
   ];
@@ -144,15 +144,55 @@ export default function KPICards({
             <strong className="text-slate-900">{usd(data.asp)}</strong>
           </span>
           <span>
-            Số lượng/mã giao dịch{" "}
+            Số lượng/ID nguồn{" "}
             <strong className="text-slate-900">
               {Number(data.upt).toLocaleString("en-US", {
                 maximumFractionDigits: 2,
               })}
             </strong>
+            {" "}
+            <span className="text-slate-500">(không phải UPT theo đơn)</span>
           </span>
           <span className="text-slate-500">Doanh thu không phải lợi nhuận.</span>
         </div>
+      )}
+      {data && !loading && (
+        <section
+          aria-label="Các chỉ số chưa đủ dữ liệu"
+          className="mt-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
+        >
+          <div className="mb-3">
+            <h3 className="text-sm font-bold text-slate-900">
+              Chỉ số chưa đủ dữ liệu để tính
+            </h3>
+            <p className="mt-1 text-xs text-slate-500">
+              Dashboard không ước tính các giá trị này từ dữ liệu bán hàng.
+            </p>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {[
+              {
+                label: "Lợi nhuận và biên lợi nhuận",
+                missing: "Cần giá vốn theo sản phẩm; lợi nhuận ròng còn cần chi phí vận hành và các điều chỉnh liên quan.",
+              },
+              {
+                label: "Tồn kho hiện tại",
+                missing: "Cần tồn đầu kỳ, nhập hàng, điều chỉnh và số liệu tồn kho tại một thời điểm.",
+              },
+            ].map(({ label, missing }) => (
+              <article
+                key={label}
+                className="rounded-lg bg-slate-50 p-3"
+              >
+                <h4 className="text-xs font-bold text-slate-800">{label}</h4>
+                <p className="mt-1 text-xs font-semibold text-slate-600">
+                  Không đủ dữ liệu để tính toán
+                </p>
+                <p className="mt-1 text-xs leading-5 text-slate-500">{missing}</p>
+              </article>
+            ))}
+          </div>
+        </section>
       )}
       {data && !loading && showTaxScenario && (
         <section
@@ -198,7 +238,7 @@ export default function KPICards({
               formatValue={usd}
             />
             <ComparisonMetric
-              label="Mã giao dịch"
+              label="Mã giao dịch nguồn"
               current={data.total_transactions}
               previous={comparison.previous.total_transactions}
               formatValue={(value) => Number(value).toLocaleString("en-US")}

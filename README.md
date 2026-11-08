@@ -28,6 +28,7 @@ backend/
     core/metrics.py     # Tổng hợp KPI, theo giờ, theo sản phẩm
     models/schemas.py   # Hợp đồng response
   data/                 # CLEAN - Transactions.csv đã làm sạch
+  scripts/              # ETL workbook XLSX sang CSV chuẩn
   tests/                # Unit tests cho công thức và bộ lọc
   requirements.txt
 frontend/
@@ -36,6 +37,7 @@ frontend/
     services/api.js
     AuthenticatedApp.jsx
 docs/
+  etl_process.md
   data_dictionary.md
   deployment_guide.md
   financial_model.md
@@ -64,6 +66,15 @@ Chạy backend tests từ thư mục `backend`:
 python -m unittest discover -s tests
 ```
 
+Làm sạch workbook nguồn thành CSV chuẩn trước khi upload:
+
+```powershell
+python -m pip install -r requirements.txt
+python scripts/clean_sales_data.py "C:\data\Coffee-Shop-Sales.xlsx" --output "C:\data\coffee-clean.csv"
+```
+
+Quy trình, quy tắc kiểm tra và tình huống sử dụng được mô tả tại [`docs/etl_process.md`](docs/etl_process.md).
+
 ### Frontend
 
 ```powershell
@@ -80,7 +91,9 @@ Mặc định frontend gọi `http://localhost:8000`. Để gọi backend khác,
 - Dataset mẫu: `backend/data/CLEAN - Transactions.csv`; khi PostgreSQL đã cấu hình, backend nhập file này một lần thành dataset mẫu chỉ đọc cho mọi tài khoản.
 - Người dùng có thể đăng ký, đăng nhập và tải CSV theo schema chuẩn. File mới được lưu thành dataset riêng của tài khoản trong PostgreSQL, không ghi đè dataset mẫu hay dataset khác.
 - Upload hiện giới hạn 25 MB và 250.000 dòng; CSV phải UTF-8, đủ 11 cột chuẩn và không có transaction ID trùng.
-- Chỉ số: doanh thu bán hàng (`transaction_qty × unit_price`), số mã giao dịch duy nhất, số lượng bán, AOV, UPT, ASP; cơ cấu theo danh mục/địa điểm; xu hướng ngày/tháng; phân tích giờ/thứ; xếp hạng sản phẩm theo doanh thu và số lượng; so sánh kỳ liền trước khi có đủ khoảng ngày.
+- Chỉ số: doanh thu bán hàng (`transaction_qty × unit_price`), mã giao dịch nguồn duy nhất, số lượng bán, doanh thu bình quân/ID nguồn, số lượng bình quân/ID nguồn, ASP; cơ cấu theo danh mục/địa điểm; xu hướng ngày/tháng; phân tích giờ/thứ; xếp hạng sản phẩm theo doanh thu và số lượng; so sánh kỳ liền trước khi có đủ khoảng ngày. Do ID hiện tại chưa được xác minh là khóa giỏ hàng/đơn hàng, không diễn giải các trung bình này là AOV/UPT của đơn.
+- Lợi nhuận, biên lợi nhuận và tồn kho hiện hiển thị chưa đủ dữ liệu; không ước tính từ doanh thu hoặc lượng bán.
+- Báo cáo hiển thị dataset, kỳ và bộ lọc; chọn danh mục/địa điểm trên biểu đồ cơ cấu để lọc chéo. Nhận xét nhanh là mô tả số liệu bằng quy tắc xác định, không phải dự báo hay kết luận nguyên nhân.
 - Đơn vị báo cáo hiển thị: USD theo quyết định của đồ án. Sales tax NYC 8,875% chỉ hiển thị như kịch bản ước tính riêng với giả định toàn bộ giao dịch chịu thuế và giá chưa gồm thuế; không phải tax collected thực tế. Xem [`docs/financial_model.md`](docs/financial_model.md).
 
 Xem [hợp đồng dữ liệu và giới hạn diễn giải](docs/technical_architecture.md) trước khi thêm chỉ số hoặc mở rộng phạm vi.
