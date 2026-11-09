@@ -685,7 +685,7 @@ export default function AuthenticatedApp() {
             />
           </label>
           <p className="basis-full text-xs leading-5 text-slate-500">
-            CSV tối đa 25 MB. Hệ thống sẽ dò tên cột, chuẩn hóa định dạng và cho bạn kiểm tra trước khi lưu.
+            CSV tối đa 40 MB và 250.000 dòng. Hệ thống sẽ dò tên cột, chuẩn hóa định dạng và cho bạn kiểm tra trước khi lưu.
             {" "}
             <a className="font-semibold text-teal-800 underline" href="/csv-template.csv" download>
               Tải CSV mẫu

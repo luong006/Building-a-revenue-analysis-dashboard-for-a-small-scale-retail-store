@@ -27,7 +27,8 @@ from app.core.persistence import Dataset, SaleRecord, SessionLocal, User
 
 
 router = APIRouter(prefix="/api", tags=["Accounts and datasets"])
-MAX_UPLOAD_BYTES = 25 * 1024 * 1024
+MAX_UPLOAD_BYTES = 40 * 1024 * 1024
+MAX_UPLOAD_SIZE_MB = MAX_UPLOAD_BYTES // (1024 * 1024)
 MAX_UPLOAD_ROWS = 250_000
 UNKNOWN_LOCATION = "Chưa xác định"
 
@@ -226,7 +227,8 @@ async def read_upload(file: UploadFile):
     contents = await file.read(MAX_UPLOAD_BYTES + 1)
     if len(contents) > MAX_UPLOAD_BYTES:
         raise HTTPException(
-            status_code=413, detail="File vượt giới hạn tải lên 25 MB."
+            status_code=413,
+            detail=f"File vượt giới hạn tải lên {MAX_UPLOAD_SIZE_MB} MB.",
         )
     return contents
 

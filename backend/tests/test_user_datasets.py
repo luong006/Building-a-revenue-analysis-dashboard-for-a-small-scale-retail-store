@@ -1,8 +1,10 @@
+import asyncio
 import unittest
 from datetime import date, time
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-from unittest.mock import patch
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, patch
 
 from fastapi import HTTPException
 from sqlalchemy import create_engine, event, select
@@ -14,6 +16,7 @@ from app.api.user_routes import (
     delete_dataset,
     get_visible_dataset,
     parse_csv,
+    read_upload,
     rename_dataset,
 )
 from app.core.auth import hash_password, verify_password
@@ -58,6 +61,20 @@ class UserDatasetTests(unittest.TestCase):
             parse_csv(b"transaction_id,transaction_date\n1,2023-01-01\n")
 
         self.assertEqual(raised.exception.status_code, 422)
+
+    def test_upload_accepts_file_at_limit_and_rejects_oversize(self):
+        uploaded_file = SimpleNamespace(
+            filename="sales.csv", read=AsyncMock(return_value=b"data")
+        )
+        with patch("app.api.user_routes.MAX_UPLOAD_BYTES", 4), patch(
+            "app.api.user_routes.MAX_UPLOAD_SIZE_MB", 1
+        ):
+            self.assertEqual(asyncio.run(read_upload(uploaded_file)), b"data")
+            uploaded_file.read = AsyncMock(return_value=b"12345")
+            with self.assertRaises(HTTPException) as raised:
+                asyncio.run(read_upload(uploaded_file))
+
+        self.assertEqual(raised.exception.status_code, 413)
 
     def test_dataset_visibility_is_limited_to_owner_or_sample(self):
         engine = create_engine("sqlite://")

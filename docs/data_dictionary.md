@@ -47,7 +47,7 @@ Trình xem trước cho biết ánh xạ, số dòng hợp lệ/lỗi/trùng, gi
 5. Đối chiếu số dòng, tổng quantity và doanh thu tính từ `quantity × unit_price` với workbook nguồn.
 6. Ghi rõ phép tính doanh thu dùng đơn giá và quantity của nguồn. Nếu workbook có giảm giá, hoàn tiền, thuế hoặc định nghĩa sales khác, dừng và thống nhất cách xử lý trước khi xuất dữ liệu.
 7. Script ghi CSV UTF-8 theo schema chuẩn, không thêm index hoặc cột dẫn xuất.
-8. Dùng upload trong dashboard; API giới hạn file 25 MB/250.000 dòng, kiểm tra schema, kiểu dữ liệu, miền giá trị; mọi lựa chọn loại dòng được ghi vào báo cáo chất lượng của dataset.
+8. Dùng upload trong dashboard; API giới hạn file 40 MiB/250.000 dòng, kiểm tra schema, kiểu dữ liệu, miền giá trị; mọi lựa chọn loại dòng được ghi vào báo cáo chất lượng của dataset.
 9. Chạy backend tests và đối chiếu tổng quan sau khi upload.
 
 Chi tiết từng bước, cách chạy và hồ sơ cần lưu cho mỗi lần xử lý được ghi tại [`etl_process.md`](etl_process.md).

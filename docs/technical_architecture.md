@@ -67,7 +67,7 @@ Các endpoint phân tích nhận bộ lọc tùy chọn `location`, `category`, 
 | `GET /api/auth/me` | Tài khoản hiện tại |
 | `GET /api/datasets` | Dataset mẫu và dataset thuộc tài khoản |
 | `POST /api/datasets/preview` | Dò cột, chuẩn hóa thử và trả báo cáo chất lượng CSV; không ghi database |
-| `POST /api/datasets/upload` | Xác thực lựa chọn từ bước xem trước và lưu dataset riêng (25 MB, tối đa 250.000 dòng) |
+| `POST /api/datasets/upload` | Xác thực lựa chọn từ bước xem trước và lưu dataset riêng (40 MiB, tối đa 250.000 dòng) |
 | `PATCH /api/datasets/{id}` | Đổi tên dataset cá nhân của chủ sở hữu |
 | `DELETE /api/datasets/{id}` | Xóa dataset cá nhân và các giao dịch thuộc dataset |
 | `GET /api/datasets/{id}/dashboard` | Dashboard theo dataset; cần access token trong header Authorization |
@@ -104,7 +104,7 @@ Frontend giữ access token trong `sessionStorage`; token hết hạn sau 60 ph�
 
 - Các endpoint legacy đọc CSV giữ hành vi HTTP 503 nếu file mẫu thiếu; auth/dataset API yêu cầu `DATABASE_URL` và `JWT_SECRET`.
 - CSV mẫu được import theo batch khi khởi tạo database; file upload được kiểm tra và ghi thành dataset riêng trước khi dashboard phân tích.
-- Upload từ chối file trên 25 MB, hơn 250.000 dòng, thiếu trường lõi hoặc không còn dòng hợp lệ. Dòng lỗi và bản sao hoàn toàn chỉ bị loại sau khi người dùng xác nhận ở bước xem trước; ID giao dịch trùng nhưng nội dung khác được giữ lại.
+- Upload từ chối file trên 40 MiB, hơn 250.000 dòng, thiếu trường lõi hoặc không còn dòng hợp lệ. Dòng lỗi và bản sao hoàn toàn chỉ bị loại sau khi người dùng xác nhận ở bước xem trước; ID giao dịch trùng nhưng nội dung khác được giữ lại.
 - Các bộ lọc SQL dùng tham số bind; không nối dữ liệu người dùng vào SQL.
 - Redis cache có TTL 300 giây; cache key phân vùng theo user, dataset và bộ lọc, không cache thông tin xác thực.
 - Test bao gồm công thức cũ, hash mật khẩu, kiểm tra CSV, phân quyền sở hữu dataset, seed một lần, lọc analytics và tách cache theo user.
