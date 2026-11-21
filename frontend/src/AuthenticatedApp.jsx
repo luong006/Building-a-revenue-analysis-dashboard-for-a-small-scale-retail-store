@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { Download } from "lucide-react";
 import {
   fetchCurrentUser,
   fetchDashboard,
@@ -11,6 +12,7 @@ import {
   uploadDataset,
 } from "./services/api";
 import { getDatePresets } from "./services/dateRanges";
+import { downloadDashboardCsv } from "./services/exportDashboard";
 import KPICards from "./components/KPICards";
 import DashboardInsights from "./components/DashboardInsights";
 import {
@@ -23,6 +25,7 @@ import {
 const EMPTY_FILTERS = {
   location: "All Locations",
   category: "All Categories",
+  product: "All Products",
   startDate: "",
   endDate: "",
 };
@@ -163,6 +166,7 @@ function DashboardFilters({
   onDateRangeChange,
   locations,
   categories,
+  products,
   onReset,
   metadata,
   locationLabel = "Địa điểm",
@@ -216,7 +220,7 @@ function DashboardFilters({
           })}
         </div>
       </div>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <label className="flex flex-col gap-1.5 text-xs font-semibold text-slate-600">
           {locationLabel}
           <select
@@ -239,6 +243,18 @@ function DashboardFilters({
           >
             <option value="All Categories">Tất cả danh mục</option>
             {categories.map((item) => <option key={item} value={item}>{item}</option>)}
+          </select>
+        </label>
+        <label className="flex flex-col gap-1.5 text-xs font-semibold text-slate-600">
+          Sản phẩm
+          <select
+            aria-label="Lọc theo sản phẩm"
+            className={inputClass}
+            value={filters.product}
+            onChange={(event) => onChange("product", event.target.value)}
+          >
+            <option value="All Products">Tất cả sản phẩm</option>
+            {products.map((item) => <option key={item} value={item}>{item}</option>)}
           </select>
         </label>
         <label className="flex flex-col gap-1.5 text-xs font-semibold text-slate-600">
@@ -389,6 +405,7 @@ export default function AuthenticatedApp() {
     granularity,
     filters.location,
     filters.category,
+    filters.product,
     filters.startDate,
     filters.endDate,
   ]);
@@ -676,6 +693,11 @@ export default function AuthenticatedApp() {
               Danh mục: {filters.category}
             </span>
           )}
+          {filters.product !== "All Products" && (
+            <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1">
+              Sản phẩm: {filters.product}
+            </span>
+          )}
           {filters.startDate && (
             <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1">
               Từ ngày: {filters.startDate}
@@ -688,12 +710,23 @@ export default function AuthenticatedApp() {
           )}
           {filters.location === "All Locations" &&
             filters.category === "All Categories" &&
+            filters.product === "All Products" &&
             !filters.startDate &&
             !filters.endDate && (
               <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1">
                 Toàn bộ dữ liệu
               </span>
             )}
+          <button
+            type="button"
+            disabled={!dashboard || loading}
+            onClick={() => downloadDashboardCsv(dashboard, filters, granularity)}
+            className="ml-auto inline-flex h-9 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:border-teal-700 hover:text-teal-800 disabled:cursor-not-allowed disabled:opacity-50"
+            aria-label="Xuất dashboard hiện tại thành CSV"
+          >
+            <Download aria-hidden="true" className="h-4 w-4" />
+            Xuất CSV
+          </button>
         </div>
 
         <section className="flex flex-wrap items-end gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -1097,6 +1130,7 @@ export default function AuthenticatedApp() {
           }
           locations={dashboard?.locations || []}
           categories={dashboard?.categories || []}
+          products={dashboard?.products || []}
           metadata={metadata}
           locationLabel={locationLabel}
           onReset={() => setFilters(EMPTY_FILTERS)}

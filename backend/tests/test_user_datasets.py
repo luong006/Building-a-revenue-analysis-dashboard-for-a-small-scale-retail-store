@@ -308,6 +308,18 @@ class UserDatasetTests(unittest.TestCase):
                     "granularity": "day",
                 },
             )
+            product_result = dashboard_data(
+                session,
+                dataset,
+                {
+                    "location": None,
+                    "category": None,
+                    "product": "Latte",
+                    "start_date": None,
+                    "end_date": None,
+                    "granularity": "day",
+                },
+            )
 
         engine.dispose()
         self.assertEqual(result["summary"]["total_revenue"], 5.0)
@@ -321,6 +333,10 @@ class UserDatasetTests(unittest.TestCase):
             {item["name"] for item in result["location_mix"]}, {"Astoria", "Chelsea"}
         )
         self.assertEqual(result["comparison"]["previous"]["total_revenue"], 6.0)
+        self.assertEqual(product_result["summary"]["total_revenue"], 17.0)
+        self.assertEqual(product_result["summary"]["total_items_sold"], 4)
+        self.assertEqual(product_result["trend"][0]["revenue"], 17.0)
+        self.assertEqual(product_result["products"], ["Chai", "Espresso", "Latte"])
 
     def test_dashboard_supports_missing_time_and_source_reported_revenue(self):
         engine = create_engine("sqlite://")

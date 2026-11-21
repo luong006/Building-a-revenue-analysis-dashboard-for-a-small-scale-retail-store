@@ -58,7 +58,7 @@ Dashboard hiển thị thêm kịch bản `R × 8.875%`, tham chiếu combined N
 
 ## 5. API hiện tại
 
-Các endpoint phân tích nhận bộ lọc tùy chọn `location`, `category`, `start_date`, `end_date`. Ngày dùng định dạng ISO `YYYY-MM-DD`; hai đầu mút được tính gồm. `start_date` sau `end_date` trả HTTP 422.
+Endpoint dashboard nhận bộ lọc tùy chọn `location`, `category`, `product`, `start_date`, `end_date`. Ngày dùng định dạng ISO `YYYY-MM-DD`; hai đầu mút được tính gồm. `start_date` sau `end_date` trả HTTP 422. Lọc sản phẩm khớp tên `product_detail` đã chuẩn hóa và áp dụng nhất quán cho KPI, xu hướng, cơ cấu, xếp hạng và so sánh kỳ.
 
 | Endpoint | Mô tả |
 |---|---|
@@ -82,7 +82,7 @@ Các endpoint phân tích nhận bộ lọc tùy chọn `location`, `category`, 
 | `GET /api/metrics/trend` | Chuỗi doanh thu theo ngày hoặc tháng; `granularity=day|month` |
 | `GET /api/metrics/top-products` | Xếp hạng theo doanh thu hoặc số lượng, kèm số lượng, doanh thu và tỷ trọng; `sort_by=revenue|quantity`, `limit` từ 1 đến 50 |
 
-Frontend không dùng fallback dữ liệu giả khi API lỗi; lỗi được hiển thị thay cho số liệu. Báo cáo nêu dataset, khoảng ngày và bộ lọc hiện hành. Chọn danh mục/địa điểm trên biểu đồ cơ cấu hoặc chú giải sẽ áp dụng bộ lọc tương ứng cho toàn bộ dashboard; chọn lại mục đang chọn sẽ bỏ riêng bộ lọc đó. Nhận xét nhanh được tạo bằng quy tắc xác định từ sản phẩm có doanh thu cao nhất, giờ/ngày/tháng nổi bật và so sánh kỳ khi đủ lịch sử; không dùng AI, không đưa ra quan hệ nhân quả hay khuyến nghị kinh doanh.
+Frontend không dùng fallback dữ liệu giả khi API lỗi; lỗi được hiển thị thay cho số liệu. Báo cáo nêu dataset, khoảng ngày và bộ lọc hiện hành. Chọn danh mục/địa điểm trên biểu đồ cơ cấu hoặc chú giải sẽ áp dụng bộ lọc tương ứng cho toàn bộ dashboard; chọn lại mục đang chọn sẽ bỏ riêng bộ lọc đó. Bộ lọc sản phẩm chọn một tên sản phẩm chuẩn hóa và cập nhật toàn bộ phân tích; nút xóa bộ lọc đưa các điều kiện về mặc định. Nhận xét nhanh được tạo bằng quy tắc xác định từ sản phẩm có doanh thu cao nhất, giờ/ngày/tháng nổi bật và so sánh kỳ khi đủ lịch sử; không dùng AI, không đưa ra quan hệ nhân quả hay khuyến nghị kinh doanh.
 
 Các endpoint `/api/metrics/*`, `/api/metadata`, `/api/locations` và `/api/categories` cũ vẫn phục vụ dataset CSV mẫu để tương thích. Frontend đăng nhập sử dụng `/api/datasets/{id}/dashboard`, endpoint này luôn kiểm tra user sở hữu dataset (ngoại trừ dataset mẫu read-only).
 

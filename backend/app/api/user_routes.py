@@ -331,7 +331,7 @@ async def upload_dataset(
     return dataset_payload(dataset)
 
 
-def filter_conditions(dataset_id, location, category, start_date, end_date):
+def filter_conditions(dataset_id, location, category, start_date, end_date, product=None):
     conditions = [SaleRecord.dataset_id == dataset_id]
     if location:
         conditions.append(
@@ -341,6 +341,8 @@ def filter_conditions(dataset_id, location, category, start_date, end_date):
         )
     if category:
         conditions.append(SaleRecord.product_category == category)
+    if product:
+        conditions.append(SaleRecord.product_detail == product)
     if start_date:
         conditions.append(SaleRecord.transaction_date >= start_date)
     if end_date:
@@ -381,6 +383,7 @@ def dashboard_data(session, dataset, filters):
         filters["category"],
         filters["start_date"],
         filters["end_date"],
+        filters.get("product"),
     )
     total = func.coalesce(
         SaleRecord.line_revenue,
@@ -394,6 +397,12 @@ def dashboard_data(session, dataset, filters):
         .distinct()
         .where(SaleRecord.dataset_id == dataset.id)
         .order_by(location_value)
+    ).all()
+    product_options = session.scalars(
+        select(SaleRecord.product_detail)
+        .distinct()
+        .where(SaleRecord.dataset_id == dataset.id)
+        .order_by(SaleRecord.product_detail)
     ).all()
     categories = session.scalars(
         select(SaleRecord.product_category)
@@ -485,9 +494,9 @@ def dashboard_data(session, dataset, filters):
             SaleRecord.product_category,
         )
     ).all()
-    products = []
+    ranked_products = []
     for row in product_rows:
-        products.append(
+        ranked_products.append(
             {
                 "product": row[0].strip() or row[1],
                 "category": row[2],
@@ -501,12 +510,12 @@ def dashboard_data(session, dataset, filters):
             }
         )
     revenue_ranked = sorted(
-        products,
+        ranked_products,
         key=lambda item: (item["total_revenue"], item["quantity_sold"]),
         reverse=True,
     )[:10]
     quantity_ranked = sorted(
-        products,
+        ranked_products,
         key=lambda item: (item["quantity_sold"], item["total_revenue"]),
         reverse=True,
     )[:10]
@@ -518,6 +527,7 @@ def dashboard_data(session, dataset, filters):
             None if dimension == "category" else filters["category"],
             filters["start_date"],
             filters["end_date"],
+            filters.get("product"),
         )
         grouped_column = (
             func.coalesce(column, UNKNOWN_LOCATION)
@@ -562,6 +572,7 @@ def dashboard_data(session, dataset, filters):
                         filters["category"],
                         previous_start,
                         previous_end,
+                        filters.get("product"),
                     ),
                 ),
                 "previousStart": previous_start.isoformat(),
@@ -575,6 +586,7 @@ def dashboard_data(session, dataset, filters):
         "metadata": dataset_payload(dataset),
         "locations": locations,
         "categories": categories,
+        "products": product_options,
         "summary": summary,
         "hourly": hourly,
         "trend": trend,
@@ -593,6 +605,7 @@ def get_dashboard(
     dataset_id: int,
     location: str | None = None,
     category: str | None = None,
+    product: str | None = None,
     start_date: date | None = None,
     end_date: date | None = None,
     granularity: str = Query("day", pattern="^(day|month)$"),
@@ -605,6 +618,7 @@ def get_dashboard(
     filters = {
         "location": location,
         "category": category,
+        "product": product,
         "start_date": start_date.isoformat() if start_date else None,
         "end_date": end_date.isoformat() if end_date else None,
         "granularity": granularity,

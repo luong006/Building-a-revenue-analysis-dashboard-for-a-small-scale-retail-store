@@ -193,6 +193,9 @@ export function fetchDashboard(token, datasetId, filters, granularity) {
   if (filters.category && filters.category !== "All Categories") {
     params.set("category", filters.category);
   }
+  if (filters.product && filters.product !== "All Products") {
+    params.set("product", filters.product);
+  }
   if (filters.startDate) params.set("start_date", filters.startDate);
   if (filters.endDate) params.set("end_date", filters.endDate);
   params.set("granularity", granularity);
