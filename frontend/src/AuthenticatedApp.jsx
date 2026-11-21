@@ -300,6 +300,7 @@ export default function AuthenticatedApp() {
   const [granularity, setGranularity] = useState("day");
   const [dashboard, setDashboard] = useState(null);
   const [authLoading, setAuthLoading] = useState(Boolean(token));
+  const [authRetry, setAuthRetry] = useState(0);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
@@ -309,6 +310,7 @@ export default function AuthenticatedApp() {
   const [importOptions, setImportOptions] = useState({
     amountSource: "",
     dateFormat: "auto",
+    columnMapping: {},
     currencyCode: "unknown",
     deduplicateExact: false,
     dropInvalidRows: false,
@@ -341,16 +343,22 @@ export default function AuthenticatedApp() {
       })
       .catch((requestError) => {
         if (cancelled) return;
-        sessionStorage.removeItem("rp_access_token");
-        setToken("");
-        setUser(null);
-        setError(requestError.message || "Phiên đăng nhập đã hết hạn.");
+        if (requestError.status === 401) {
+          sessionStorage.removeItem("rp_access_token");
+          setToken("");
+          setUser(null);
+          setError(requestError.message || "Phiên đăng nhập đã hết hạn.");
+        } else {
+          setError(
+            "Chưa thể kết nối tài khoản với backend. Phiên đăng nhập vẫn được giữ; hãy thử lại.",
+          );
+        }
       })
       .finally(() => {
         if (!cancelled) setAuthLoading(false);
       });
     return () => { cancelled = true; };
-  }, [token]);
+  }, [token, authRetry]);
 
   useEffect(() => {
     if (!token || !datasetId) return undefined;
@@ -425,6 +433,7 @@ export default function AuthenticatedApp() {
       setImportOptions({
         amountSource: preview.amount_source || "",
         dateFormat: "auto",
+        columnMapping: preview.mapping || {},
         currencyCode: "unknown",
         deduplicateExact: preview.exact_duplicate_rows > 0,
         dropInvalidRows: false,
@@ -445,8 +454,17 @@ export default function AuthenticatedApp() {
       const preview = await previewDataset(token, pendingUpload, {
         amountSource: importOptions.amountSource,
         dateFormat: importOptions.dateFormat,
+        columnMapping: importOptions.columnMapping,
       });
       setImportPreview(preview);
+      setImportOptions((current) => ({
+        ...current,
+        amountSource: preview.available_amount_sources.includes(
+          current.amountSource,
+        )
+          ? current.amountSource
+          : preview.amount_source || "",
+      }));
     } catch (previewError) {
       setError(previewError.message || "Không thể cập nhật bản xem trước.");
     } finally {
@@ -462,6 +480,7 @@ export default function AuthenticatedApp() {
       const created = await uploadDataset(token, pendingUpload, {
         ...importOptions,
         amountSource: importPreview.amount_source,
+        columnMapping: importPreview.mapping,
       });
       setDatasets((current) => [created, ...current]);
       setDatasetId(String(created.id));
@@ -494,6 +513,18 @@ export default function AuthenticatedApp() {
       <div className="flex min-h-screen flex-col bg-slate-50">
         <AuthForm onAuthenticated={onAuthenticated} />
         {error && <p className="mx-auto mb-6 max-w-md px-4 text-center text-sm text-rose-800" role="alert">{error}</p>}
+        {token && (
+          <button
+            type="button"
+            onClick={() => {
+              setAuthLoading(true);
+              setAuthRetry((attempt) => attempt + 1);
+            }}
+            className="mx-auto mb-6 text-sm font-semibold text-teal-800 underline"
+          >
+            Thử khôi phục phiên
+          </button>
+        )}
       </div>
     );
   }
@@ -515,6 +546,15 @@ export default function AuthenticatedApp() {
       ? importPreview.invalid_rows_after_deduplication
       : importPreview.invalid_rows
     : 0;
+  const mappingFields = new Set([
+    ...Object.keys(importPreview?.mapping || {}),
+    ...Object.keys(importOptions.columnMapping || {}),
+  ]);
+  const mappingChanged = [...mappingFields].some(
+    (field) =>
+      (importPreview?.mapping?.[field] || "") !==
+      (importOptions.columnMapping?.[field] || ""),
+  );
   const missingTransactionTime =
     metadata?.quality_report?.missing_optional_columns?.includes(
       "transaction_time",
@@ -856,9 +896,10 @@ export default function AuthenticatedApp() {
 
             <div className="space-y-2 text-sm text-slate-700">
               {(importPreview.amount_source !== importOptions.amountSource ||
-                importPreview.date_format !== importOptions.dateFormat) && (
+                importPreview.date_format !== importOptions.dateFormat ||
+                mappingChanged) && (
                 <p className="rounded-lg bg-blue-50 p-3 text-blue-900">
-                  Lựa chọn vừa thay đổi; hãy cập nhật xem trước để kiểm tra lại số dòng hợp lệ và lỗi.
+                  Lựa chọn vừa thay đổi; hãy cập nhật xem trước để kiểm tra lại ánh xạ, số dòng hợp lệ và lỗi.
                 </p>
               )}
               {!/^(unknown|[A-Z]{3})$/.test(importOptions.currencyCode) && (
@@ -913,14 +954,38 @@ export default function AuthenticatedApp() {
 
             <div className="grid gap-4 lg:grid-cols-2">
               <div>
-                <h4 className="text-sm font-bold text-slate-800">Ghép cột đã nhận diện</h4>
-                <ul className="mt-2 grid gap-1 text-xs text-slate-600 sm:grid-cols-2">
-                  {Object.entries(importPreview.mapping).map(([field, header]) => (
-                    <li key={field}>
-                      <strong>{IMPORT_FIELD_LABELS[field] || field}:</strong> {header}
-                    </li>
+                <h4 className="text-sm font-bold text-slate-800">Ánh xạ cột nguồn</h4>
+                <p className="mt-1 text-xs leading-5 text-slate-500">
+                  Kiểm tra gợi ý tự động hoặc chọn cột tương ứng. Không gán một cột cho nhiều trường khác nhau.
+                </p>
+                <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                  {Object.entries(IMPORT_FIELD_LABELS).map(([field, label]) => (
+                    <label key={field} className="min-w-0 text-xs font-semibold text-slate-600">
+                      {label}
+                      <select
+                        aria-label={`Ánh xạ ${label}`}
+                        value={importOptions.columnMapping[field] || ""}
+                        onChange={(event) =>
+                          setImportOptions((current) => ({
+                            ...current,
+                            columnMapping: {
+                              ...current.columnMapping,
+                              [field]: event.target.value,
+                            },
+                          }))
+                        }
+                        className="mt-1 h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-xs font-normal text-slate-800"
+                      >
+                        <option value="">Không ánh xạ</option>
+                        {importPreview.headers.map((header, index) => (
+                          <option key={`${header}-${index}`} value={header}>
+                            {header || `(cột ${index + 1})`}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
                   ))}
-                </ul>
+                </div>
                 {importPreview.missing_optional_columns.length > 0 && (
                   <p className="mt-2 text-xs text-slate-500">
                     Không có cột tùy chọn: {importPreview.missing_optional_columns.map((field) => IMPORT_FIELD_LABELS[field] || field).join(", ")}. Hệ thống để trống, không tạo dữ liệu giả.
@@ -986,6 +1051,7 @@ export default function AuthenticatedApp() {
                 disabled={
                   uploading ||
                   !importPreview.ready ||
+                  mappingChanged ||
                   importPreview.amount_source !== importOptions.amountSource ||
                   importPreview.date_format !== importOptions.dateFormat ||
                   (invalidRowsToDrop > 0 && !importOptions.dropInvalidRows) ||

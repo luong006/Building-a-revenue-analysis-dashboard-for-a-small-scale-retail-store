@@ -96,9 +96,11 @@ async function authenticatedRequest(path, token, options = {}) {
   });
   if (!response.ok) {
     const detail = body?.detail;
-    throw new Error(
+    const error = new Error(
       typeof detail === "string" ? detail : detail?.message || response.statusText,
     );
+    error.status = response.status;
+    throw error;
   }
   return body;
 }
@@ -150,6 +152,9 @@ export function previewDataset(token, file, options = {}) {
   if (options.dateFormat) {
     formData.append("date_format", options.dateFormat);
   }
+  if (options.columnMapping) {
+    formData.append("column_mapping", JSON.stringify(options.columnMapping));
+  }
   return authenticatedRequest("/api/datasets/preview", token, {
     method: "POST",
     body: formData,
@@ -169,6 +174,10 @@ export function uploadDataset(token, file, options = {}) {
   formData.append(
     "drop_invalid_rows",
     options.dropInvalidRows ? "true" : "false",
+  );
+  formData.append(
+    "column_mapping",
+    JSON.stringify(options.columnMapping || {}),
   );
   return authenticatedRequest("/api/datasets/upload", token, {
     method: "POST",

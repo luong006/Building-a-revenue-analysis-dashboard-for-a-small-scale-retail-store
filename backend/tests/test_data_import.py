@@ -32,6 +32,68 @@ class DataImportTests(unittest.TestCase):
         self.assertEqual(first_date, date(2024, 1, 2))
         self.assertEqual(last_date, date(2024, 1, 2))
 
+    def test_quantity_must_be_positive(self):
+        for quantity in ("0", "-2"):
+            with self.subTest(quantity=quantity):
+                content = self.csv.replace(b",2,Coffee,", f",{quantity},Coffee,".encode())
+                with self.assertRaisesRegex(ValueError, "transaction_qty phải lớn hơn 0"):
+                    normalize_csv(content, "total_spent", False, False)
+
+    def test_manual_mapping_accepts_unfamiliar_headers(self):
+        content = (
+            "Order Ref,Booked On,Units,Department,Item Name,Gross Sales\n"
+            "TX-42,2024-02-03,3,Beverages,Matcha,18.75\n"
+        ).encode("utf-8")
+        mapping = {
+            "transaction_id": "Order Ref",
+            "transaction_date": "Booked On",
+            "transaction_qty": "Units",
+            "product_category": "Department",
+            "product_type": "Item Name",
+            "product_detail": "Item Name",
+            "total_spent": "Gross Sales",
+        }
+
+        automatic_preview = preview_csv(content)
+        self.assertIn("transaction_id", automatic_preview["missing_columns"])
+
+        preview = preview_csv(
+            content,
+            amount_source="total_spent",
+            column_mapping=mapping,
+        )
+        self.assertTrue(preview["ready"])
+        self.assertEqual(preview["mapping"]["transaction_qty"], "Units")
+        self.assertEqual(preview["normalized_preview"][0]["line_revenue"], 18.75)
+
+        records, first_date, last_date, report = normalize_csv(
+            content,
+            amount_source="total_spent",
+            deduplicate_exact=False,
+            drop_invalid_rows=False,
+            column_mapping=mapping,
+        )
+        self.assertEqual(len(records), 1)
+        self.assertEqual(records[0]["transaction_id"], "TX-42")
+        self.assertEqual(records[0]["product_detail"], "Matcha")
+        self.assertEqual(records[0]["line_revenue"], 18.75)
+        self.assertEqual(first_date, date(2024, 2, 3))
+        self.assertEqual(last_date, date(2024, 2, 3))
+        self.assertEqual(report["amount_source"], "total_spent")
+
+    def test_manual_mapping_rejects_missing_or_conflicting_source_columns(self):
+        with self.assertRaisesRegex(ValueError, "Cột nguồn không tồn tại"):
+            preview_csv(
+                self.csv,
+                column_mapping={"transaction_id": "missing-column"},
+            )
+
+        with self.assertRaisesRegex(ValueError, "đang được gán cho nhiều trường"):
+            preview_csv(
+                self.csv,
+                column_mapping={"transaction_id": "transaction_date"},
+            )
+
     def test_finds_header_after_preamble_and_parses_unambiguous_day_first_date(self):
         content = (
             "Retail sales export\n"
@@ -112,11 +174,11 @@ class DataImportTests(unittest.TestCase):
             drop_invalid_rows=True,
             date_format="day_first",
         )
-        self.assertEqual(len(records), 9750)
+        self.assertEqual(len(records), 9730)
         self.assertEqual(first_date, date(2022, 1, 1))
         self.assertEqual(last_date, date(2024, 12, 30))
         self.assertEqual(report["exact_duplicates_removed"], 150)
-        self.assertEqual(report["invalid_rows_removed"], 250)
+        self.assertEqual(report["invalid_rows_removed"], 270)
         self.assertEqual(report["warning_returned_rows"], 2014)
 
 

@@ -221,6 +221,22 @@ def parse_csv(
         raise HTTPException(status_code=422, detail=str(error)) from error
 
 
+def parse_column_mapping(value: str | None):
+    if not value:
+        return None
+    try:
+        mapping = json.loads(value)
+    except json.JSONDecodeError as error:
+        raise HTTPException(
+            status_code=422, detail="column_mapping phải là JSON hợp lệ."
+        ) from error
+    if not isinstance(mapping, dict):
+        raise HTTPException(
+            status_code=422, detail="column_mapping phải là một object JSON."
+        )
+    return mapping
+
+
 async def read_upload(file: UploadFile):
     if Path(file.filename or "").suffix.lower() != ".csv":
         raise HTTPException(status_code=415, detail="Chỉ hỗ trợ file .csv.")
@@ -238,13 +254,17 @@ async def preview_dataset(
     file: UploadFile = File(...),
     amount_source: str | None = Form(default=None),
     date_format: str = Form(default="auto"),
+    column_mapping: str | None = Form(default=None),
     user: User = Depends(get_current_user),
 ):
     del user
     contents = await read_upload(file)
     try:
         return preview_csv(
-            contents, amount_source=amount_source, date_format=date_format
+            contents,
+            amount_source=amount_source,
+            date_format=date_format,
+            column_mapping=parse_column_mapping(column_mapping),
         )
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
@@ -258,6 +278,7 @@ async def upload_dataset(
     currency_code: str = Form(default="unknown"),
     deduplicate_exact: bool = Form(default=False),
     drop_invalid_rows: bool = Form(default=False),
+    column_mapping: str | None = Form(default=None),
     session: Session = Depends(db_session),
     user: User = Depends(get_current_user),
 ):
@@ -269,6 +290,7 @@ async def upload_dataset(
             deduplicate_exact=deduplicate_exact,
             drop_invalid_rows=drop_invalid_rows,
             date_format=date_format,
+            column_mapping=parse_column_mapping(column_mapping),
         )
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error

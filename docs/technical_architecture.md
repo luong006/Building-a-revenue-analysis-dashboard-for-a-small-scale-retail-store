@@ -90,7 +90,7 @@ Các endpoint `/api/metrics/*`, `/api/metadata`, `/api/locations` và `/api/cate
 
 | Biến | Mặc định | Mục đích |
 |---|---|---|
-| `DATA_PATH` | `backend/data/CLEAN - Transactions.csv` | Đường dẫn CSV sạch; có thể ghi đè khi triển khai |
+| `DATA_PATH` | `backend/data/CLEAN - Transactions.csv`; nếu thiếu thì dùng `backend/data/Coffee Shop Sales.csv` | Đường dẫn CSV seed; có thể ghi đè khi triển khai |
 | `CORS_ORIGINS` | localhost + Vercel production | Danh sách origin, phân cách bằng dấu phẩy |
 | `CURRENCY_CODE` | `USD` | Mã tiền tệ cho các endpoint legacy/dataset mẫu; dataset upload lưu mã xác nhận riêng |
 | `VITE_API_BASE_URL` | `http://localhost:8000` | URL backend được nhúng lúc build frontend |

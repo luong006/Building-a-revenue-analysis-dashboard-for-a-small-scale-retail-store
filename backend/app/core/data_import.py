@@ -179,6 +179,19 @@ def _map_headers(headers):
     return mapped, unmapped
 
 
+def _looks_like_header(row):
+    values = [value.strip() for value in row if value.strip()]
+    if len(values) < 3:
+        return False
+    keys = [_header_key(value) for value in values]
+    labels = sum(any(char.isalpha() for char in value) for value in values)
+    return (
+        len(set(keys)) == len(keys)
+        and labels >= 3
+        and labels / len(values) >= 0.6
+    )
+
+
 def _read_csv(contents):
     try:
         text = contents.decode("utf-8-sig")
@@ -195,7 +208,18 @@ def _read_csv(contents):
             headers = candidate
             break
     if header_index is None:
-        raise ValueError("CSV không có dòng tiêu đề.")
+        candidates = [
+            (sum(bool(value.strip()) for value in row), -index, index, row)
+            for index, row in enumerate(rows[:10])
+            if _looks_like_header(row)
+        ]
+        if candidates:
+            _, _, header_index, row = max(candidates)
+            headers = [value.strip() for value in row]
+    if header_index is None:
+        raise ValueError(
+            "Không xác định được dòng tiêu đề. Hãy đặt tên cột ở đầu file và kiểm tra CSV."
+        )
     data_rows = [
         {
             headers[index]: row[index] if index < len(row) else ""
@@ -206,6 +230,48 @@ def _read_csv(contents):
     if len(data_rows) > 250_000:
         raise ValueError("CSV vượt giới hạn 250.000 dòng.")
     return headers, data_rows, header_index
+
+
+def _resolve_mapping(headers, column_mapping=None):
+    mapping, _ = _map_headers(headers)
+    explicit_fields = set()
+    if column_mapping is not None:
+        if not isinstance(column_mapping, dict):
+            raise ValueError("column_mapping phải là một object JSON.")
+        unknown_fields = set(column_mapping) - set(ALIASES)
+        if unknown_fields:
+            raise ValueError(
+                "Trường ánh xạ không được hỗ trợ: "
+                + ", ".join(sorted(unknown_fields))
+            )
+        for field, source in column_mapping.items():
+            explicit_fields.add(field)
+            if source in (None, ""):
+                mapping.pop(field, None)
+                continue
+            if not isinstance(source, str) or source not in headers:
+                raise ValueError(f"Cột nguồn không tồn tại cho trường {field}.")
+            mapping[field] = source
+
+    for field, fallback in (
+        ("product_detail", "product_type"),
+        ("product_type", "product_detail"),
+    ):
+        if field not in mapping and field not in explicit_fields and fallback in mapping:
+            mapping[field] = mapping[fallback]
+
+    sources = {}
+    for field, source in mapping.items():
+        sources.setdefault(source, []).append(field)
+    for source, fields in sources.items():
+        if len(fields) > 1 and set(fields) != {"product_type", "product_detail"}:
+            raise ValueError(
+                f"Cột '{source}' đang được gán cho nhiều trường: "
+                + ", ".join(sorted(fields))
+            )
+
+    unmapped = [header for header in headers if header not in mapping.values()]
+    return mapping, unmapped
 
 
 def _raw_signature(row, headers):
@@ -231,8 +297,10 @@ def _normalize_row(row, mapping, amount_source, date_format):
     transaction_id = str(required["transaction_id"]).strip()
     if len(transaction_id) > 120:
         raise ValueError("transaction_id vượt quá 120 ký tự")
-    quantity = _parse_integer(required["transaction_qty"], "transaction_qty")
     sale_date = _parse_date(required["transaction_date"], date_format)
+    quantity = _parse_integer(required["transaction_qty"], "transaction_qty")
+    if quantity <= 0:
+        raise ValueError("transaction_qty phải lớn hơn 0")
     time_value = value("transaction_time")
     sale_time = None if _missing(time_value) else _parse_time(time_value)
 
@@ -320,11 +388,16 @@ def _normalize_row(row, mapping, amount_source, date_format):
     }
 
 
-def preview_csv(contents, amount_source=None, date_format="auto"):
+def preview_csv(
+    contents,
+    amount_source=None,
+    date_format="auto",
+    column_mapping=None,
+):
     if date_format not in {"auto", "day_first", "month_first"}:
         raise ValueError("date_format phải là auto, day_first hoặc month_first.")
     headers, rows, header_index = _read_csv(contents)
-    mapping, unmapped = _map_headers(headers)
+    mapping, unmapped = _resolve_mapping(headers, column_mapping)
     available_amount_sources = [
         key
         for key in ("total_spent", "calculated")
@@ -494,8 +567,9 @@ def normalize_csv(
     deduplicate_exact,
     drop_invalid_rows,
     date_format="auto",
+    column_mapping=None,
 ):
-    preview = preview_csv(contents, amount_source, date_format)
+    preview = preview_csv(contents, amount_source, date_format, column_mapping)
     if preview["missing_columns"]:
         raise ValueError(
             "Không nhận diện đủ trường cần thiết: "

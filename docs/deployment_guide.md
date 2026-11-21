@@ -16,7 +16,7 @@ Tạo Web Service từ repository, cấu hình:
 - Start Command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
 - Health Check Path: `/healthz` (không phụ thuộc CSV).
 - `CORS_ORIGINS`: domain Vercel production và `http://localhost:5173`, phân cách bằng dấu phẩy. Không dùng `*` cho ứng dụng có xác thực.
-- `DATA_PATH`: để trống nếu dùng file mặc định `data/CLEAN - Transactions.csv` trong thư mục `backend`.
+- `DATA_PATH`: có thể để trống; backend ưu tiên `data/CLEAN - Transactions.csv`, nếu file này không có thì dùng `data/Coffee Shop Sales.csv` trong thư mục `backend`.
 - `CURRENCY_CODE`: mặc định `USD` theo quyết định báo cáo của đồ án; có thể ghi đè nếu metadata nguồn được xác minh khác.
 - `DATABASE_URL`: URL nội bộ của Render PostgreSQL. Database lưu user, dataset và từng giao dịch.
 - `REDIS_URL`: URL kết nối Render Redis. Redis cache phản hồi dashboard trong 5 phút; không dùng làm nơi lưu dữ liệu duy nhất.

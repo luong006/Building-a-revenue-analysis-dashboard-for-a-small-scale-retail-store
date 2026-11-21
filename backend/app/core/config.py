@@ -2,11 +2,11 @@ import os
 from pathlib import Path
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
+DEFAULT_DATA_PATH = BACKEND_DIR / "data" / "CLEAN - Transactions.csv"
+if not DEFAULT_DATA_PATH.is_file():
+    DEFAULT_DATA_PATH = BACKEND_DIR / "data" / "Coffee Shop Sales.csv"
 DATA_PATH = Path(
-    os.getenv(
-        "DATA_PATH",
-        str(BACKEND_DIR / "data" / "CLEAN - Transactions.csv"),
-    )
+    os.getenv("DATA_PATH", str(DEFAULT_DATA_PATH))
 ).expanduser()
 CURRENCY_CODE = os.getenv("CURRENCY_CODE") or "USD"
 

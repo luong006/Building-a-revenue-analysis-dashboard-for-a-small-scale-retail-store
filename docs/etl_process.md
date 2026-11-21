@@ -4,7 +4,7 @@
 
 Quy trình chuyển dữ liệu giao dịch thành bản ghi có cấu trúc để phân tích. Workbook Coffee mẫu có thể được làm sạch ngoại tuyến bằng script Python; CSV tải lên được backend dò cột, chuẩn hóa và kiểm tra trong bước xem trước trước khi người dùng xác nhận.
 
-Script `backend/scripts/clean_sales_data.py` đọc workbook `.xlsx` Coffee và tạo CSV theo schema chuẩn. Nó không sửa file raw. API upload hỗ trợ các tiêu đề CSV phổ biến của bảng giao dịch đơn, không cần đổi tiêu đề thủ công theo mẫu Coffee. Người dùng được xem các cột đã ghép, lỗi, trùng lặp, giá trị thiếu và bản ghi mẫu trước khi xác nhận lưu PostgreSQL. Dataset Coffee trong `backend/data/CLEAN - Transactions.csv` là dữ liệu mẫu.
+Script `backend/scripts/clean_sales_data.py` đọc workbook `.xlsx` Coffee và tạo CSV theo schema chuẩn. Nó không sửa file raw. API upload hỗ trợ các tiêu đề CSV phổ biến của bảng giao dịch đơn, không cần đổi tiêu đề thủ công theo mẫu Coffee. Người dùng được xem các cột đã ghép, lỗi, trùng lặp, giá trị thiếu và bản ghi mẫu trước khi xác nhận lưu PostgreSQL. Dataset mẫu ưu tiên `backend/data/CLEAN - Transactions.csv`; nếu chưa có file đó, cấu hình mặc định dùng CSV Coffee có sẵn tại `backend/data/Coffee Shop Sales.csv`.
 
 ## Các bước ETL thực tế
 

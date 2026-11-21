@@ -4,6 +4,18 @@
 
 Dashboard **không** tính lợi nhuận, giá vốn, tồn kho hiện tại hay nhu cầu nhập hàng. Dataset chỉ chứa dữ liệu bán hàng. Các định nghĩa chỉ số, giới hạn diễn giải và luồng làm sạch dữ liệu được ghi trong [`docs/technical_architecture.md`](docs/technical_architecture.md) và [`docs/data_dictionary.md`](docs/data_dictionary.md).
 
+## Tiến độ dự án
+
+**Cập nhật: 2026-11-21**
+
+- Ứng dụng React/Vite và API FastAPI đã được triển khai trên Vercel và Render. Các health endpoint của Render phản hồi; cần tiếp tục kiểm tra luồng upload và dashboard đầu-cuối trên production.
+- Đã có đăng ký/đăng nhập, dataset riêng theo tài khoản, preview CSV, lựa chọn xử lý lỗi/trùng, dashboard và bộ lọc phân tích.
+- Đang hoàn thiện bước nhập liệu: thêm ánh xạ cột thủ công trong màn hình preview để xử lý tiêu đề CSV khác với các alias tự động nhận diện. Thay đổi này cần chạy CI và deploy trước khi được coi là có trên production.
+- Kiểm tra cục bộ gần nhất: 7 test của bộ import CSV đạt; chưa chạy full backend suite hoặc frontend build trong môi trường này do thiếu dependencies Python và Node.js.
+- Việc tiếp theo: chạy CI đầy đủ, deploy thay đổi mapping, sau đó thử upload một CSV có header không chuẩn và xác nhận dashboard trả KPI cho dataset mới.
+
+Cập nhật mục này sau mỗi mốc kiểm thử hoặc deploy; ghi rõ ngày, kết quả và việc còn lại để README phản ánh đúng trạng thái sản phẩm.
+
 ## Kiến trúc
 
 ```text
@@ -88,9 +100,10 @@ Mặc định frontend gọi `http://localhost:8000`. Để gọi backend khác,
 ## Dataset và chỉ số
 
 - Dữ liệu nguồn: [Coffee Shop Sales của Ahmedabbas75](https://github.com/Ahmedabbas75/Coffee-Shop-Sales), cửa hàng giả lập Maven Roasters.
-- Dataset mẫu: `backend/data/CLEAN - Transactions.csv`; khi PostgreSQL đã cấu hình, backend nhập file này một lần thành dataset mẫu chỉ đọc cho mọi tài khoản.
-- Người dùng có thể đăng ký, đăng nhập và tải CSV theo schema chuẩn. File mới được lưu thành dataset riêng của tài khoản trong PostgreSQL, không ghi đè dataset mẫu hay dataset khác.
-- Upload hiện giới hạn 25 MB và 250.000 dòng; CSV phải UTF-8, đủ 11 cột chuẩn và không có transaction ID trùng.
+- Dataset mẫu: ưu tiên `backend/data/CLEAN - Transactions.csv`, nếu chưa có thì dùng `backend/data/Coffee Shop Sales.csv`; khi PostgreSQL đã cấu hình, backend nhập file được chọn một lần thành dataset mẫu chỉ đọc cho mọi tài khoản.
+- Người dùng có thể đăng ký, đăng nhập và tải CSV theo schema giao dịch. File mới được lưu thành dataset riêng của tài khoản trong PostgreSQL, không ghi đè dataset mẫu hay dataset khác.
+- Upload giới hạn 40 MiB và 250.000 dòng. CSV phải UTF-8 và cần có mã giao dịch nguồn, ngày, số lượng, danh mục, tên/loại sản phẩm cùng một nguồn doanh thu (cột tiền nguồn hoặc số lượng × đơn giá). Không bắt buộc đủ 11 cột Coffee; các cột tùy chọn có thể để trống.
+- Hệ thống tự gợi ý ánh xạ tên cột phổ biến. Trong preview, người dùng có thể tự ánh xạ lại từng cột sang trường chuẩn, kiểm tra lại preview, chọn nguồn doanh thu, cách hiểu ngày mơ hồ và xác nhận riêng việc loại dòng lỗi hoặc trùng hoàn toàn. Không tự tạo mã giao dịch, sản phẩm hay giá trị tài chính bị thiếu.
 - Chỉ số: doanh thu bán hàng (`transaction_qty × unit_price`), mã giao dịch nguồn duy nhất, số lượng bán, doanh thu bình quân/ID nguồn, số lượng bình quân/ID nguồn, ASP; cơ cấu theo danh mục/địa điểm; xu hướng ngày/tháng; phân tích giờ/thứ; xếp hạng sản phẩm theo doanh thu và số lượng; so sánh kỳ liền trước khi có đủ khoảng ngày. Do ID hiện tại chưa được xác minh là khóa giỏ hàng/đơn hàng, không diễn giải các trung bình này là AOV/UPT của đơn.
 - Lợi nhuận, biên lợi nhuận và tồn kho hiện hiển thị chưa đủ dữ liệu; không ước tính từ doanh thu hoặc lượng bán.
 - Báo cáo hiển thị dataset, kỳ và bộ lọc; chọn danh mục/địa điểm trên biểu đồ cơ cấu để lọc chéo. Nhận xét nhanh là mô tả số liệu bằng quy tắc xác định, không phải dự báo hay kết luận nguyên nhân.
